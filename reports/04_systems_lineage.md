@@ -1,4 +1,4 @@
-# LLM Inference 系统演进谱系
+# [LLM Inference](https://arxiv.org/abs/2410.04466) 系统演进谱系
 
 ## 系统概览
 
@@ -6,17 +6,17 @@
 
 ---
 
-## 1. vLLM (UC Berkeley, 2023.09)
+## 1. [vLLM](https://github.com/vllm-project/vllm) (UC Berkeley, 2023.09)
 
 ### 核心创新
-- **PagedAttention**: 将 KV cache 按 page（block）管理，类似 OS 虚拟内存分页，解决 KV cache 内存碎片化问题
+- [**PagedAttention**](https://arxiv.org/abs/2309.06180): 将 KV cache 按 page（block）管理，类似 OS 虚拟内存分页，解决 KV cache 内存碎片化问题
 - 实现 near-zero waste 的内存利用率（浪费 < 4%，对比 naive 方案 60-80% 浪费）
 
 ### 关键技术组件
 | 组件 | 实现 |
 |------|------|
 | Scheduler | Continuous batching + preemption (swap/recompute) |
-| Memory Manager | PagedAttention block table，copy-on-write for parallel sampling |
+| Memory Manager | [PagedAttention](https://arxiv.org/abs/2309.06180) block table，copy-on-write for parallel sampling |
 | Kernel Backend | 自研 paged attention kernel，后集成 FlashAttention/FlashInfer |
 | Prefix Caching | Automatic prefix caching (APC)，hash-based block matching |
 
@@ -32,27 +32,27 @@
 - 社区生态最活跃（70k+ stars）
 
 ### 技术借鉴
-- 从 Orca 借鉴 continuous batching 思想
-- 后续被 SGLang、LightLLM、TensorRT-LLM 等借鉴 paged memory 设计
+- 从 [Orca](https://www.usenix.org/conference/osdi22/presentation/yu) 借鉴 continuous batching 思想
+- 后续被 [SGLang](https://github.com/sgl-project/sglang)、[LightLLM](https://github.com/ModelTC/lightllm)、[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) 等借鉴 paged memory 设计
 
 ---
 
-## 2. SGLang (Stanford/UC Berkeley, 2023.12)
+## 2. [SGLang](https://github.com/sgl-project/sglang) (Stanford/UC Berkeley, 2023.12)
 
 ### 核心创新
-- **RadixAttention**: 用 radix tree 管理 KV cache prefix，实现自动、细粒度的前缀复用
+- [**RadixAttention**](https://arxiv.org/abs/2312.07104): 用 radix tree 管理 KV cache prefix，实现自动、细粒度的前缀复用
 - **Structured Generation Language**: 编程模型层面优化 LLM 程序（fork/join/select）
 
 ### 关键技术组件
 | 组件 | 实现 |
 |------|------|
-| Scheduler | Continuous batching + chunked prefill + RadixAttention-aware scheduling |
-| Memory Manager | RadixAttention tree-based KV cache pool |
-| Kernel Backend | FlashInfer (primary), Triton kernels |
+| Scheduler | Continuous batching + chunked prefill + [RadixAttention](https://arxiv.org/abs/2312.07104)-aware scheduling |
+| Memory Manager | [RadixAttention](https://arxiv.org/abs/2312.07104) tree-based KV cache pool |
+| Kernel Backend | [FlashInfer](https://github.com/flashinfer-ai/flashinfer) (primary), Triton kernels |
 | Frontend | Python-embedded DSL for structured LLM programs |
 
 ### 支持的优化技术
-- RadixAttention prefix caching（比 vLLM APC 更细粒度）
+- [RadixAttention](https://arxiv.org/abs/2312.07104) prefix caching（比 vLLM APC 更细粒度）
 - Constrained decoding (regex/JSON schema)
 - Speculative decoding, tensor parallelism
 - Multi-modal support, data parallelism
@@ -63,29 +63,29 @@
 - 适合复杂 LLM 程序编排
 
 ### 技术借鉴
-- 从 vLLM 借鉴 continuous batching 和 paged memory 基本思路
-- RadixAttention 是对 Prompt Cache 和 prefix caching 的系统化改进
-- FlashInfer 作为 kernel backend 提供高效 attention 实现
+- 从 [vLLM](https://github.com/vllm-project/vllm) 借鉴 continuous batching 和 paged memory 基本思路
+- [RadixAttention](https://arxiv.org/abs/2312.07104) 是对 [Prompt Cache](https://arxiv.org/abs/2311.04934) 和 prefix caching 的系统化改进
+- [FlashInfer](https://github.com/flashinfer-ai/flashinfer) 作为 kernel backend 提供高效 attention 实现
 
 ---
 
-## 3. TensorRT-LLM (NVIDIA, 2023.10)
+## 3. [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) (NVIDIA, 2023.10)
 
 ### 核心创新
-- **In-flight Batching**: NVIDIA 版 continuous batching，与 TensorRT 编译优化深度集成
-- **FP8 全链路**: 从 weight 到 KV cache 到 attention 的 FP8 支持
+- [**In-flight Batching**](https://nvidia.github.io/TensorRT-LLM/features/paged-attention-ifb-scheduler.html): NVIDIA 版 continuous batching，与 TensorRT 编译优化深度集成
+- **FP8 全链路**: 从 weight 到 KV cache 到 attention 的 [FP8](https://arxiv.org/abs/2209.05433) 支持
 
 ### 关键技术组件
 | 组件 | 实现 |
 |------|------|
 | Scheduler | In-flight batching (Batch Manager) |
-| Memory Manager | Paged KV cache + FP8 KV cache |
-| Kernel Backend | TensorRT fused kernels, CUTLASS, cuBLAS |
+| Memory Manager | Paged KV cache + [FP8](https://arxiv.org/abs/2209.05433) KV cache |
+| Kernel Backend | TensorRT fused kernels, [CUTLASS](https://github.com/NVIDIA/cutlass), cuBLAS |
 | Compiler | TensorRT graph optimization + kernel fusion |
 
 ### 支持的优化技术
 - In-flight batching, paged KV cache
-- INT8/FP8 weight + activation quantization (SmoothQuant, AWQ, GPTQ)
+- INT8/FP8 weight + activation quantization ([SmoothQuant](https://arxiv.org/abs/2211.10438), AWQ, GPTQ)
 - Multi-GPU tensor parallelism + pipeline parallelism
 - Speculative decoding, KV cache reuse
 - Inflight batching + chunked context
@@ -96,13 +96,13 @@
 - 对 NVIDIA 硬件有深度绑定
 
 ### 技术借鉴
-- 从 FasterTransformer 演进而来
-- Continuous batching 思想来自 Orca
-- Paged KV cache 受 vLLM 影响
+- 从 [FasterTransformer](https://github.com/NVIDIA/FasterTransformer) 演进而来
+- Continuous batching 思想来自 [Orca](https://www.usenix.org/conference/osdi22/presentation/yu)
+- Paged KV cache 受 [vLLM](https://github.com/vllm-project/vllm) 影响
 
 ---
 
-## 4. llama.cpp (ggerganov, 2023.03)
+## 4. [llama.cpp](https://github.com/ggerganov/llama.cpp) (ggerganov, 2023.03)
 
 ### 核心创新
 - **纯 C/C++ 实现**: 无 Python/CUDA 依赖，跨平台推理
@@ -114,7 +114,7 @@
 | Scheduler | 单请求为主，server mode 支持简单 batching |
 | Memory Manager | 静态 KV cache 分配，mmap 模型加载 |
 | Kernel Backend | CPU SIMD (AVX/NEON/WASM), Metal, CUDA, Vulkan |
-| Quantization | GGUF 格式：k-quant (Q2_K~Q8_0), IQ (importance quant) |
+| Quantization | [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) 格式：k-quant (Q2_K~Q8_0), IQ (importance quant) |
 
 ### 支持的优化技术
 - 多种量化格式（2-8 bit），importance matrix guided quantization
@@ -126,15 +126,15 @@
 ### 性能特征与适用场景
 - 消费级硬件（CPU/Apple Silicon）上的最佳选择
 - 离线推理、本地部署、边缘设备
-- 模型格式转换的事实标准（GGUF）
+- 模型格式转换的事实标准（[GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md)）
 
 ### 技术借鉴
 - 量化方法受 GPTQ/AWQ 启发但自研实现
-- 后续 prima.cpp 等项目基于其扩展分布式能力
+- 后续 [prima.cpp](https://arxiv.org/abs/2504.08791) 等项目基于其扩展分布式能力
 
 ---
 
-## 5. TGI - Text Generation Inference (HuggingFace)
+## 5. [TGI](https://github.com/huggingface/text-generation-inference) - Text Generation Inference (HuggingFace)
 
 ### 核心创新
 - **生产级 Rust 服务**: 高性能 gRPC/HTTP 服务框架
@@ -151,7 +151,7 @@
 ### 支持的优化技术
 - Continuous batching, Flash Attention
 - Tensor parallelism (NCCL)
-- Quantization (GPTQ, AWQ, bitsandbytes)
+- Quantization ([GPTQ](https://arxiv.org/abs/2210.17323), AWQ, bitsandbytes)
 - Speculative decoding, watermarking
 - Prefix caching
 
@@ -161,13 +161,13 @@
 - Rust 服务层保证低延迟
 
 ### 技术借鉴
-- Continuous batching 来自 Orca
+- Continuous batching 来自 [Orca](https://www.usenix.org/conference/osdi22/presentation/yu)
 - Flash Attention 集成
-- Paged attention 受 vLLM 启发
+- Paged attention 受 [vLLM](https://github.com/vllm-project/vllm) 启发
 
 ---
 
-## 6. LightLLM (ModelTC, 2023.08)
+## 6. [LightLLM](https://github.com/ModelTC/lightllm) (ModelTC, 2023.08)
 
 ### 核心创新
 - **轻量级 Python 实现**: 易于理解和修改的 serving 框架
@@ -193,12 +193,12 @@
 - 性能略低于 vLLM/TensorRT-LLM
 
 ### 技术借鉴
-- 整体架构受 vLLM 启发
+- 整体架构受 [vLLM](https://github.com/vllm-project/vllm) 启发
 - Token-level 管理思想独立发展
 
 ---
 
-## 7. LMDeploy (InternLM/Shanghai AI Lab, 2023.06)
+## 7. [LMDeploy](https://lmdeploy.readthedocs.io/en/latest/) (InternLM/Shanghai AI Lab, 2023.06)
 
 ### 核心创新
 - **TurboMind Engine**: 高性能 C++ 推理引擎
@@ -208,13 +208,13 @@
 | 组件 | 实现 |
 |------|------|
 | Scheduler | Continuous batching |
-| Memory Manager | Block-based KV cache (similar to PagedAttention) |
+| Memory Manager | Block-based KV cache (similar to [PagedAttention](https://arxiv.org/abs/2309.06180)) |
 | Kernel Backend | TurboMind (C++ CUDA kernels) |
-| Quantization | W4A16 (AWQ), KV cache INT8 |
+| Quantization | W4A16 ([AWQ](https://arxiv.org/abs/2306.00978)), KV cache INT8 |
 
 ### 支持的优化技术
 - Continuous batching, persistent batching
-- W4A16 quantization (AWQ-based)
+- W4A16 quantization ([AWQ](https://arxiv.org/abs/2306.00978)-based)
 - KV cache INT8 quantization
 - Tensor parallelism
 - Multi-modal model support (InternVL)
@@ -226,12 +226,12 @@
 
 ### 技术借鉴
 - Continuous batching 来自 Orca/vLLM
-- 量化方法集成 AWQ
-- KV cache 管理受 PagedAttention 影响
+- 量化方法集成 [AWQ](https://arxiv.org/abs/2306.00978)
+- KV cache 管理受 [PagedAttention](https://arxiv.org/abs/2309.06180) 影响
 
 ---
 
-## 8. MLC-LLM (mlc-ai, 2023.05)
+## 8. [MLC-LLM](https://github.com/mlc-ai/mlc-llm) (mlc-ai, 2023.05)
 
 ### 核心创新
 - **ML Compilation**: 基于 Apache TVM 的编译优化
@@ -262,10 +262,10 @@
 
 ---
 
-## 9. DeepSpeed-FastGen (Microsoft, 2023.11)
+## 9. [DeepSpeed](https://github.com/microsoft/DeepSpeed)-FastGen (Microsoft, 2023.11)
 
 ### 核心创新
-- **SplitFuse**: 将 long prompt 拆分 + 将 short prompt 与 generation 融合
+- [**SplitFuse**](https://arxiv.org/abs/2401.08671): 将 long prompt 拆分 + 将 short prompt 与 generation 融合
 - **Dynamic SplitFuse**: 自适应调整 split 粒度
 
 ### 关键技术组件
@@ -273,25 +273,25 @@
 |------|------|
 | Scheduler | SplitFuse continuous batching |
 | Memory Manager | Blocked KV cache |
-| Kernel Backend | DeepSpeed inference kernels |
+| Kernel Backend | [DeepSpeed](https://github.com/microsoft/DeepSpeed) inference kernels |
 | Integration | MII (Model Implementations for Inference) |
 
 ### 支持的优化技术
 - SplitFuse (chunked prefill variant)
 - Continuous batching
 - Tensor parallelism
-- Quantization (ZeroQuant series)
+- Quantization ([ZeroQuant](https://arxiv.org/abs/2206.01861) series)
 - Non-persistent pipeline
 
 ### 性能特征与适用场景
-- 与 DeepSpeed 训练框架集成
-- 适合已使用 DeepSpeed 训练的模型直接部署
-- 声称 2x vLLM 吞吐（有争议）
+- 与 [DeepSpeed](https://github.com/microsoft/DeepSpeed) 训练框架集成
+- 适合已使用 [DeepSpeed](https://github.com/microsoft/DeepSpeed) 训练的模型直接部署
+- 声称 2x [vLLM](https://github.com/vllm-project/vllm) 吞吐（有争议）
 
 ### 技术借鉴
-- Continuous batching 来自 Orca
-- SplitFuse 是 chunked prefill 的变体（与 Sarathi 类似思想）
-- 量化使用自研 ZeroQuant 系列
+- Continuous batching 来自 [Orca](https://www.usenix.org/conference/osdi22/presentation/yu)
+- SplitFuse 是 chunked prefill 的变体（与 [Sarathi](https://arxiv.org/abs/2308.16369) 类似思想）
+- 量化使用自研 [ZeroQuant](https://arxiv.org/abs/2206.01861) 系列
 
 ---
 
@@ -328,13 +328,13 @@ gantt
 
 ## 技术栈对比表
 
-| 特性 | vLLM | SGLang | TensorRT-LLM | llama.cpp | LMDeploy | MLC-LLM | DeepSpeed-FG | LightLLM |
+| 特性 | [vLLM](https://github.com/vllm-project/vllm) | [SGLang](https://github.com/sgl-project/sglang) | [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) | [llama.cpp](https://github.com/ggerganov/llama.cpp) | [LMDeploy](https://github.com/InternLM/lmdeploy) | [MLC-LLM](https://github.com/mlc-ai/mlc-llm) | [DeepSpeed](https://github.com/microsoft/DeepSpeed)-FG | [LightLLM](https://github.com/ModelTC/lightllm) |
 |------|------|--------|--------------|-----------|----------|---------|--------------|----------|
 | **语言** | Python+CUDA | Python+CUDA | C++/Python | C/C++ | C++/Python | C++/TVM | Python+CUDA | Python+Triton |
-| **Continuous Batching** | ✅ | ✅ | ✅ | ⚠️ (server) | ✅ | ❌ | ✅ | ✅ |
+| [**Continuous Batching**](https://www.usenix.org/system/files/osdi22-yu.pdf) | ✅ | ✅ | ✅ | ⚠️ (server) | ✅ | ❌ | ✅ | ✅ |
 | **Paged KV Cache** | ✅ | ✅ (Radix) | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ (token) |
 | **Prefix Caching** | ✅ (APC) | ✅ (Radix) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **Speculative Decoding** | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| [**Speculative Decoding**](https://arxiv.org/abs/2211.17192) | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ |
 | **Tensor Parallelism** | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ✅ |
 | **FP8 Support** | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **CPU Inference** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |
@@ -385,12 +385,12 @@ graph TD
 
 | 系统 | 一句话差异化 |
 |------|-------------|
-| vLLM | 内存效率（PagedAttention）+ 最大社区生态 |
-| SGLang | 前缀复用（RadixAttention）+ 结构化生成编程模型 |
-| TensorRT-LLM | NVIDIA 硬件深度优化 + 编译期 kernel fusion |
-| llama.cpp | 跨平台 + 消费级硬件 + 量化格式标准 |
-| LMDeploy | InternLM 生态 + 全流程工具链 |
-| MLC-LLM | 编译优化 + 移动端/浏览器部署 |
-| DeepSpeed-FastGen | DeepSpeed 训练生态集成 + SplitFuse |
-| LightLLM | 轻量级 + 研究友好 + Triton kernel |
-| Mooncake | KV cache 中心的 disaggregated 架构 |
+| [vLLM](https://github.com/vllm-project/vllm) | 内存效率（[PagedAttention](https://arxiv.org/abs/2309.06180)）+ 最大社区生态 |
+| [SGLang](https://github.com/sgl-project/sglang) | 前缀复用（[RadixAttention](https://arxiv.org/abs/2312.07104)）+ 结构化生成编程模型 |
+| [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) | NVIDIA 硬件深度优化 + 编译期 kernel fusion |
+| [llama.cpp](https://github.com/ggerganov/llama.cpp) | 跨平台 + 消费级硬件 + 量化格式标准 |
+| [LMDeploy](https://lmdeploy.readthedocs.io/en/latest/) | InternLM 生态 + 全流程工具链 |
+| [MLC-LLM](https://github.com/mlc-ai/mlc-llm) | 编译优化 + 移动端/浏览器部署 |
+| [DeepSpeed](https://github.com/microsoft/DeepSpeed)-FastGen | [DeepSpeed](https://github.com/microsoft/DeepSpeed) 训练生态集成 + SplitFuse |
+| [LightLLM](https://github.com/ModelTC/lightllm) | 轻量级 + 研究友好 + Triton kernel |
+| [Mooncake](https://arxiv.org/abs/2407.00079) | KV cache 中心的 disaggregated 架构 |

@@ -2,13 +2,13 @@
 
 ## 总览
 
-本文档汇总 LLM Inference 领域中论文间的矛盾结论、容易被忽视的 caveats、以及常见的工程误区。
+本文档汇总 [LLM Inference](https://arxiv.org/abs/2410.04466) 领域中论文间的矛盾结论、容易被忽视的 caveats、以及常见的工程误区。
 
 ---
 
 ## 1. 论文间矛盾
 
-### 1.1 Speculative Decoding 的实际收益
+### 1.1 [Speculative Decoding](https://arxiv.org/abs/2211.17192) 的实际收益
 
 **矛盾**：
 - 论文声称：2-4x speedup（单请求，batch=1）
@@ -20,7 +20,7 @@
 - Speculation 增加的计算量在高 batch 下不可忽略
 - Draft model 的 KV cache 额外占用显存，减少可用 batch size
 
-**结论**：Speculative decoding 在低并发/长序列场景有效，高吞吐 serving 中收益有限。MagicDec 尝试解决这个问题。
+**结论**：Speculative decoding 在低并发/长序列场景有效，高吞吐 serving 中收益有限。[MagicDec](https://arxiv.org/abs/2408.11049) 尝试解决这个问题。
 
 ### 1.2 KV Cache 压缩的精度影响
 
@@ -36,10 +36,10 @@
 
 **结论**：KV 压缩需要 task-aware 评估，不能只看 PPL。
 
-### 1.3 Continuous Batching 的 overhead
+### 1.3 [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) 的 overhead
 
 **矛盾**：
-- Orca 论文：36.9x throughput improvement
+- [Orca](https://www.usenix.org/conference/osdi22/presentation/yu) 论文：36.9x throughput improvement
 - 实际部署：overhead 在 2-5%
 
 **原因分析**：
@@ -52,7 +52,7 @@
 ### 1.4 P/D Disaggregation 的网络需求
 
 **矛盾**：
-- DistServe 声称：1.5-2.3x goodput improvement
+- [DistServe](https://arxiv.org/abs/2401.09670) 声称：1.5-2.3x goodput improvement
 - 实际部署：需要极高带宽网络，否则 KV transfer 成为瓶颈
 
 **原因分析**：
@@ -63,19 +63,19 @@
 
 **结论**：P/D disaggregation 需要 NVLink 或 RDMA，不适合普通网络环境。
 
-### 1.5 FlashAttention 的适用范围
+### 1.5 [FlashAttention](https://arxiv.org/abs/2205.14135) 的适用范围
 
 **矛盾**：
-- FlashAttention 论文：2-4x speedup
+- [FlashAttention](https://arxiv.org/abs/2205.14135) 论文：2-4x speedup
 - 实际：在短序列 + 大 batch 下可能不如 cuBLAS
 
 **原因分析**：
-- FlashAttention 优化的是 IO（减少 HBM 访问）
+- [FlashAttention](https://arxiv.org/abs/2205.14135) 优化的是 IO（减少 HBM 访问）
 - 短序列时 attention 本身不是瓶颈
-- 大 batch 时 GEMM 变为 compute-bound，FlashAttention 的 tiling overhead 反而有害
-- FlashAttention-3 在 H100 上的 FP8 模式才能充分利用硬件
+- 大 batch 时 GEMM 变为 compute-bound，[FlashAttention](https://arxiv.org/abs/2205.14135) 的 tiling overhead 反而有害
+- [FlashAttention-3](https://arxiv.org/abs/2407.08608) 在 H100 上的 FP8 模式才能充分利用硬件
 
-**结论**：FlashAttention 在长序列 + 中等 batch 下收益最大。
+**结论**：[FlashAttention](https://arxiv.org/abs/2205.14135) 在长序列 + 中等 batch 下收益最大。
 
 ---
 
@@ -98,7 +98,7 @@
 - Prefill 阶段的 activation 可能很大：$batch \times seq\_len \times hidden \times 4$ bytes
 
 **错误 2**：忽略 memory fragmentation
-- PagedAttention 的 block 粒度导致内部碎片
+- [PagedAttention](https://arxiv.org/abs/2309.06180) 的 block 粒度导致内部碎片
 - 16 token block：平均浪费 8 tokens 的空间
 
 **错误 3**：忽略 CUDA context overhead
@@ -109,7 +109,7 @@
 
 | 成本 | 描述 |
 |------|------|
-| 校准时间 | GPTQ 对 70B 模型需要数小时 |
+| 校准时间 | [GPTQ](https://arxiv.org/abs/2210.17323) 对 70B 模型需要数小时 |
 | 精度评估 | 需要在目标任务上评估，不能只看 PPL |
 | Kernel 支持 | 不是所有量化格式都有高效 kernel |
 | 动态范围 | Outlier 处理不当导致精度崩溃 |
@@ -147,9 +147,9 @@
 - 对于小模型（7B），TP=2 可能比 TP=4 快（通信 overhead > 计算节省）
 - Decode 阶段尤其明显（计算量小，通信占比高）
 
-### 3.3 "FP8 无损"
+### 3.3 "[FP8](https://arxiv.org/abs/2209.05433) 无损"
 
-**误区**：FP8 量化没有精度损失。
+**误区**：[FP8](https://arxiv.org/abs/2209.05433) 量化没有精度损失。
 
 **现实**：
 - E4M3 只有 3 bit mantissa，动态范围有限
@@ -187,17 +187,17 @@
 |------|------|----------|
 | Latency vs Throughput | 无法同时最优 | P/D disaggregation, adaptive batching |
 | Compression vs Accuracy | 压缩越多精度越差 | Task-aware compression, learned codebook |
-| Speculation vs Batch | 高 batch 下 speculation 无效 | Batch-aware speculation (MineDraft) |
+| Speculation vs Batch | 高 batch 下 speculation 无效 | Batch-aware speculation ([MineDraft](https://arxiv.org/abs/2603.18016)) |
 | Long Context vs Memory | 长序列 KV cache 爆炸 | Offloading + compression + sparse |
-| Generality vs Performance | 通用框架 vs 专用优化 | Compiler-based approach (MLC-LLM) |
+| Generality vs Performance | 通用框架 vs 专用优化 | Compiler-based approach ([MLC-LLM](https://github.com/mlc-ai/mlc-llm)) |
 
 ### 4.2 需要更多实验验证的声明
 
-1. "RadixAttention 在所有场景下优于 APC" — 需要在低 prefix reuse 场景验证
-2. "EAGLE-2 的 dynamic tree 总是优于 static tree" — 需要在不同 temperature 下验证
+1. "[RadixAttention](https://arxiv.org/abs/2312.07104) 在所有场景下优于 APC" — 需要在低 prefix reuse 场景验证
+2. "[EAGLE-2](https://arxiv.org/abs/2406.16858) 的 dynamic tree 总是优于 static tree" — 需要在不同 temperature 下验证
 3. "P/D disaggregation 在所有负载下都有效" — 需要在低 QPS 下验证
-4. "MoE 推理可以通过 expert offloading 在消费级 GPU 上运行" — 需要验证实际延迟
-5. "Non-transformer 架构（Mamba）可以替代 Transformer" — 需要在复杂推理任务上验证
+4. "[MoE](https://arxiv.org/abs/2407.06204) 推理可以通过 expert offloading 在消费级 GPU 上运行" — 需要验证实际延迟
+5. "Non-transformer 架构（[Mamba](https://arxiv.org/abs/2312.00752)）可以替代 Transformer" — 需要在复杂推理任务上验证
 
 ---
 
@@ -207,12 +207,12 @@
 
 | 论文 | 当前归属 | 问题 | 建议 |
 |------|----------|------|------|
-| Mooncake | 出现在 Trending、Framework、Batching、KV Cache 四个章节 | 重复计入导致统计膨胀 | 应标注主归属为 Framework/Disaggregation，其余为交叉引用 |
-| Star Attention | 同时出现在 Trending 和 Multi-GPU Parallelism | 重复 | 主归属 Parallelism |
-| DeepSeek-V2/V3/R1 | 同时出现在 Trending、MLA、MoE | 重复 | 主归属 MLA/Architecture |
-| Splitwise | 归属 Continuous Batching | 实际是 P/D Disaggregation 的早期工作 | 应归属 Disaggregating Prefill and Decoding |
-| LightSeq | 归属 Continuous Batching | 实际是 Sequence Parallelism | 应归属 Multi-GPU Parallelism |
-| vAttention/vTensor | 归属 Continuous Batching | 核心贡献是 memory management | 可保留，但更适合独立的 Memory Management 子章节 |
+| [Mooncake](https://arxiv.org/abs/2407.00079) | 出现在 Trending、Framework、Batching、KV Cache 四个章节 | 重复计入导致统计膨胀 | 应标注主归属为 Framework/Disaggregation，其余为交叉引用 |
+| [Star Attention](https://arxiv.org/abs/2411.17116) | 同时出现在 Trending 和 Multi-GPU Parallelism | 重复 | 主归属 Parallelism |
+| DeepSeek-V2/V3/R1 | 同时出现在 Trending、[MLA](https://arxiv.org/abs/2405.04434)、[MoE](https://arxiv.org/abs/2407.06204) | 重复 | 主归属 MLA/Architecture |
+| [Splitwise](https://arxiv.org/abs/2311.18677) | 归属 [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) | 实际是 P/D Disaggregation 的早期工作 | 应归属 Disaggregating Prefill and Decoding |
+| [LightSeq](https://arxiv.org/abs/2310.03294) | 归属 [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) | 实际是 Sequence Parallelism | 应归属 Multi-GPU Parallelism |
+| vAttention/vTensor | 归属 [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) | 核心贡献是 memory management | 可保留，但更适合独立的 Memory Management 子章节 |
 
 ### 5.2 系统论文的遗漏
 
@@ -220,23 +220,23 @@
 
 | 论文 | 年份 | 重要性 | 遗漏原因推测 |
 |------|------|--------|-------------|
-| Sarathi-Serve (stall-free serving) | 2024 | 高 — chunked prefill 的系统化实现 | 仅 Sarathi 被提及（在 KV Cache 章节），Sarathi-Serve 未收录 |
+| [Sarathi-Serve](https://arxiv.org/abs/2403.02310) (stall-free serving) | 2024 | 高 — chunked prefill 的系统化实现 | 仅 [Sarathi](https://arxiv.org/abs/2308.16369) 被提及（在 KV Cache 章节），[Sarathi-Serve](https://arxiv.org/abs/2403.02310) 未收录 |
 | LoongServe (elastic SP) | 2024 | 中 — 动态 SP 调度 | 可能发表时间较晚 |
 | ORCA 的后续 (Vidur, etc.) | 2024 | 中 — serving simulator | 工具类论文 |
 | Infinite-LLM/DistKV-LLM | 2024.01 | 已收录 | — |
 
 ### 5.3 系统演进描述中的潜在误导
 
-1. **DeepSpeed-FastGen "2x vLLM" 声明**：仓库标题保留了 "2x vLLM?" 的问号，这是合理的。vLLM 团队发布了反驳 blog，实际差距取决于 workload。仓库未标注此争议。
+1. **DeepSpeed-[FastGen](https://arxiv.org/abs/2310.01801) "2x vLLM" 声明**：仓库标题保留了 "2x vLLM?" 的问号，这是合理的。vLLM 团队发布了反驳 blog，实际差距取决于 workload。仓库未标注此争议。
 
 2. **TensorRT-LLM 的开源程度**：仓库将其列为开源框架（有 GitHub 链接），但实际核心 kernel 是闭源的（预编译 .so）。这影响可复现性评估。
 
-3. **llama.cpp 的 serving 能力**：仓库将其与 vLLM/SGLang 并列为 Framework，但 llama.cpp 的 server mode 功能远弱于专业 serving 系统（无 paged attention、有限的 batching）。应注明其定位是本地推理而非生产 serving。
+3. **llama.cpp 的 serving 能力**：仓库将其与 vLLM/SGLang 并列为 Framework，但 [llama.cpp](https://github.com/ggerganov/llama.cpp) 的 server mode 功能远弱于专业 serving 系统（无 paged attention、有限的 batching）。应注明其定位是本地推理而非生产 serving。
 
 ### 5.4 Benchmark 数据的时效性问题
 
-- 报告 11 (benchmark_map.md) 中引用的性能数据来自各论文发表时的版本。vLLM、SGLang 等系统迭代极快（月级更新），论文中的对比数据可能已过时。
-- 例如：vLLM 0.2 时代的性能数据不能代表 vLLM 0.6+ 的表现。
+- 报告 11 (benchmark_map.md) 中引用的性能数据来自各论文发表时的版本。[vLLM](https://github.com/vllm-project/vllm)、[SGLang](https://github.com/sgl-project/sglang) 等系统迭代极快（月级更新），论文中的对比数据可能已过时。
+- 例如：[vLLM](https://github.com/vllm-project/vllm) 0.2 时代的性能数据不能代表 [vLLM](https://github.com/vllm-project/vllm) 0.6+ 的表现。
 - 建议：benchmark 数据标注系统版本号和测试日期。
 
 ### 5.5 Serving 方向的分类缺失

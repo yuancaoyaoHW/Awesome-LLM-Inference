@@ -30,7 +30,7 @@ $$
 - $d_h$: 每个 head 的维度
 - $N$: 序列长度
 - $B$: batch size
-- bytes: 数据类型字节数（FP16=2, FP8=1, INT8=1, INT4=0.5）
+- bytes: 数据类型字节数（FP16=2, [FP8](https://arxiv.org/abs/2209.05433)=1, INT8=1, INT4=0.5）
 
 ### 1.3 典型模型 KV Cache 大小
 
@@ -38,14 +38,14 @@ $$
 |------|---|------------------------|--------|--------------------------|-------------|---------------|
 | Llama-2-7B | 32 | 32 | 128 | 512 KB | 2 GB | 64 GB |
 | Llama-2-13B | 40 | 40 | 128 | 640 KB | 2.5 GB | 80 GB |
-| Llama-2-70B | 80 | 8 (GQA) | 128 | 160 KB | 0.625 GB | 20 GB |
-| Llama-3-8B | 32 | 8 (GQA) | 128 | 128 KB | 0.5 GB | 16 GB |
-| Llama-3-70B | 80 | 8 (GQA) | 128 | 160 KB | 0.625 GB | 20 GB |
-| Mixtral-8x7B | 32 | 8 (GQA) | 128 | 128 KB | 0.5 GB | 16 GB |
-| DeepSeek-V2 | 60 | 1 (MLA) | 512* | 60 KB | 0.24 GB | 7.5 GB |
-| DeepSeek-V3 | 61 | 1 (MLA) | 512* | 61 KB | 0.24 GB | 7.6 GB |
+| Llama-2-70B | 80 | 8 ([GQA](https://arxiv.org/abs/2305.13245)) | 128 | 160 KB | 0.625 GB | 20 GB |
+| Llama-3-8B | 32 | 8 ([GQA](https://arxiv.org/abs/2305.13245)) | 128 | 128 KB | 0.5 GB | 16 GB |
+| Llama-3-70B | 80 | 8 ([GQA](https://arxiv.org/abs/2305.13245)) | 128 | 160 KB | 0.625 GB | 20 GB |
+| [Mixtral](https://arxiv.org/abs/2401.04088)-8x7B | 32 | 8 ([GQA](https://arxiv.org/abs/2305.13245)) | 128 | 128 KB | 0.5 GB | 16 GB |
+| [DeepSeek-V2](https://arxiv.org/abs/2405.04434) | 60 | 1 (MLA) | 512* | 60 KB | 0.24 GB | 7.5 GB |
+| [DeepSeek-V3](https://arxiv.org/abs/2412.19437) | 61 | 1 (MLA) | 512* | 61 KB | 0.24 GB | 7.6 GB |
 
-*注：DeepSeek-V2/V3 使用 MLA，KV cache 为压缩后的 latent vector（$d_c = 512$），而非传统 KV heads。
+*注：DeepSeek-V2/V3 使用 [MLA](https://arxiv.org/abs/2405.04434)，KV cache 为压缩后的 latent vector（$d_c = 512$），而非传统 KV heads。
 
 **推导示例（Llama-2-7B, 4K, B=1, FP16）：**
 
@@ -76,11 +76,11 @@ graph TD
 
 ---
 
-## 2. KV Cache Compression
+## 2. [KV Cache Compress](https://arxiv.org/abs/2305.17118)ion
 
 ### 2.1 Quantization 方法
 
-#### 2.1.1 KIVI (Liu et al., 2024)
+#### 2.1.1 [KIVI](https://arxiv.org/abs/2402.02750) (Liu et al., 2024)
 
 **问题定义：** KV cache 在长序列时占用大量显存，需要低比特量化但不能显著损失精度。
 
@@ -102,9 +102,9 @@ Value per-token: 对每个 token 位置独立计算 $s, z$
 
 **实验指标：** Llama-2-7B 上 2-bit KV cache，WikiText-2 perplexity 仅增加 0.3（5.47 → 5.77）。
 
-**工程难点：** Per-channel key quantization 需要在 attention 计算时做 dequantize，与 FlashAttention 的 tiling 策略冲突，需要定制 kernel。
+**工程难点：** Per-channel key quantization 需要在 attention 计算时做 dequantize，与 [FlashAttention](https://arxiv.org/abs/2205.14135) 的 tiling 策略冲突，需要定制 kernel。
 
-#### 2.1.2 KVQuant (Hooper et al., 2024)
+#### 2.1.2 [KVQuant](https://arxiv.org/abs/2401.18079) (Hooper et al., 2024)
 
 **问题定义：** 支持 10M+ context length 的 KV cache 量化。
 
@@ -118,7 +118,7 @@ Value per-token: 对每个 token 位置独立计算 $s, z$
 
 **工程难点：** NUQ 需要 calibration data 确定 codebook，增加部署复杂度。
 
-#### 2.1.3 Gear (Kang et al., 2024)
+#### 2.1.3 [Gear](https://arxiv.org/abs/2403.05527) (Kang et al., 2024)
 
 **问题定义：** 统一处理 KV cache 中的 outlier 问题。
 
@@ -135,14 +135,14 @@ $$
 
 **压缩率：** 2-bit 主体 + rank-4 低秩 + 2% sparse，等效约 2.5 bits/element。
 
-#### 2.1.4 WKVQuant (Yue et al., 2024)
+#### 2.1.4 [WKVQuant](https://arxiv.org/abs/2402.12065) (Yue et al., 2024)
 
 **方法核心：** 将 weight quantization 和 KV cache quantization 联合优化。
 
 - 观察：weight quantization 误差会放大 KV cache 的 outlier
 - 方案：先做 weight-aware KV calibration，再做 KV quantization
 
-#### 2.1.5 QAQ (Dong et al., 2024)
+#### 2.1.5 [QAQ](https://arxiv.org/abs/2403.04643) (Dong et al., 2024)
 
 **方法核心：** Quality Adaptive Quantization
 - 对不同 attention head 和不同 layer 使用不同的量化精度
@@ -151,7 +151,7 @@ $$
 
 ### 2.2 Eviction/Dropping 方法
 
-#### 2.2.1 H2O - Heavy Hitter Oracle (Zhang et al., 2023)
+#### 2.2.1 [H2O](https://arxiv.org/abs/2306.14048) - Heavy Hitter Oracle (Zhang et al., 2023)
 
 **问题定义：** 在有限 KV cache budget 下保持 attention 质量。
 
@@ -174,7 +174,7 @@ $$
 
 **工程难点：** 需要维护 cumulative attention score，每步 decode 有额外开销。
 
-#### 2.2.2 SnapKV (Li et al., 2024)
+#### 2.2.2 [SnapKV](https://arxiv.org/abs/2404.14469) (Li et al., 2024)
 
 **问题定义：** 自动压缩 KV cache 用于长上下文推理。
 
@@ -183,9 +183,9 @@ $$
 - 对每个 head 独立选择 top-k important positions
 - Pooling kernel 平滑 attention pattern 避免噪声
 
-**与 H2O 的区别：** SnapKV 在 prefill 结束后一次性决定保留哪些 token，无需 decode 时动态更新。
+**与 [H2O](https://arxiv.org/abs/2306.14048) 的区别：** [SnapKV](https://arxiv.org/abs/2404.14469) 在 prefill 结束后一次性决定保留哪些 token，无需 decode 时动态更新。
 
-#### 2.2.3 PyramidKV (Cai et al., 2024)
+#### 2.2.3 [PyramidKV](https://arxiv.org/abs/2406.02069) (Cai et al., 2024)
 
 **方法核心：** 不同层使用不同的 KV cache budget。
 
@@ -196,7 +196,7 @@ $$
 B_l = B_{\text{total}} \times \frac{L - l + 1}{\sum_{i=1}^{L} i} = B_{\text{total}} \times \frac{2(L - l + 1)}{L(L+1)}
 $$
 
-#### 2.2.4 FastGen (Ge et al., 2024)
+#### 2.2.4 [FastGen](https://arxiv.org/abs/2310.01801) (Ge et al., 2024)
 
 **方法核心：** 基于 attention pattern 的自适应 KV cache 压缩。
 
@@ -204,7 +204,7 @@ $$
 - 对每个 head 选择最匹配的 pattern，只保留对应的 KV entries
 - 不同 head 可以有不同的压缩策略
 
-#### 2.2.5 Scissorhands (Liu et al., 2023)
+#### 2.2.5 [Scissorhands](https://arxiv.org/abs/2305.17118) (Liu et al., 2023)
 
 **方法核心：** 基于 "importance persistence" 假设。
 
@@ -225,14 +225,14 @@ $$
 
 **优势：** 相比 eviction，merging 保留了被丢弃 token 的部分信息。
 
-#### 2.3.2 D2O (Wan et al., 2024)
+#### 2.3.2 [D2O](https://arxiv.org/abs/2406.13035) (Wan et al., 2024)
 
 **方法核心：** Dynamic token Dropping with cOmpensation。
 
 - 在 evict token 时，将其信息补偿到相邻 token 的 KV 中
 - 补偿公式基于 attention weight 的相对大小
 
-#### 2.3.3 KVMerger (Wang et al., 2024)
+#### 2.3.3 [KVMerger](https://arxiv.org/abs/2407.08454) (Wang et al., 2024)
 
 **方法核心：** 基于 Gaussian kernel weighted merging。
 
@@ -243,17 +243,17 @@ $$
 
 | 粒度 | 方法示例 | 优势 | 劣势 |
 |------|----------|------|------|
-| Token-level | H2O, SnapKV | 实现简单，压缩率高 | 丢失完整 token 信息 |
-| Head-level | PyramidKV, QAQ | 适应不同 head 的重要性 | 需要 per-head 分析 |
-| Layer-level | PyramidKV, CLA | 利用层间冗余 | 可能影响深层推理 |
-| Channel-level | KIVI (key) | 适应 channel 分布 | kernel 实现复杂 |
-| Mixed | Gear, FastGen | 灵活，精度好 | 系统复杂度高 |
+| Token-level | [H2O](https://arxiv.org/abs/2306.14048), [SnapKV](https://arxiv.org/abs/2404.14469) | 实现简单，压缩率高 | 丢失完整 token 信息 |
+| Head-level | [PyramidKV](https://arxiv.org/abs/2406.02069), QAQ | 适应不同 head 的重要性 | 需要 per-head 分析 |
+| Layer-level | [PyramidKV](https://arxiv.org/abs/2406.02069), CLA | 利用层间冗余 | 可能影响深层推理 |
+| Channel-level | [KIVI](https://arxiv.org/abs/2402.02750) (key) | 适应 channel 分布 | kernel 实现复杂 |
+| Mixed | Gear, [FastGen](https://arxiv.org/abs/2310.01801) | 灵活，精度好 | 系统复杂度高 |
 
 ---
 
 ## 3. KV Cache Scheduling
 
-### 3.1 vLLM Block Manager
+### 3.1 [vLLM](https://github.com/vllm-project/vllm) Block Manager
 
 **核心设计：** 借鉴 OS 虚拟内存的 paging 机制。
 
@@ -292,7 +292,7 @@ graph LR
 
 ### 3.2 Preemption 策略
 
-当 GPU 显存不足时，vLLM 支持两种 preemption：
+当 GPU 显存不足时，[vLLM](https://github.com/vllm-project/vllm) 支持两种 preemption：
 
 | 策略 | 机制 | 延迟 | 适用场景 |
 |------|------|------|----------|
@@ -328,7 +328,7 @@ Beam search 中多个 beam 共享前缀：
 
 ### 3.5 Disaggregated KV Cache
 
-#### 3.5.1 Mooncake (Moonshot AI, 2024)
+#### 3.5.1 [Mooncake](https://arxiv.org/abs/2407.00079) (Moonshot AI, 2024)
 
 **架构：** KV Cache 中心的分离式推理架构。
 
@@ -358,7 +358,7 @@ graph TB
 
 **带宽需求：** Llama-70B, 4K context, FP16: 20 GB KV cache。RDMA 200 Gbps (25 GB/s) 下传输时间 = 0.8s。
 
-#### 3.5.2 InfiniGen (Lee et al., 2024)
+#### 3.5.2 [InfiniGen](https://arxiv.org/abs/2406.19707) (Lee et al., 2024)
 
 **方法核心：** 将 KV cache offload 到 CPU，按需 prefetch 到 GPU。
 
@@ -370,7 +370,7 @@ graph TB
 
 ## 4. Long Context KV Cache
 
-### 4.1 InfLLM (Xiao et al., 2024)
+### 4.1 [InfLLM](https://arxiv.org/abs/2402.04617) (Xiao et al., 2024)
 
 **问题定义：** 支持超长上下文（100K+ tokens）而不 OOM。
 
@@ -379,7 +379,7 @@ graph TB
 - Block-level management: 以 block 为单位管理和调度
 - Relevance-based retrieval: 根据当前 query 从 CPU 检索相关 blocks
 
-### 4.2 MemServe (Hu et al., 2024)
+### 4.2 [MemServe](https://arxiv.org/abs/2406.17565) (Hu et al., 2024)
 
 **方法核心：** 跨请求的 KV cache 复用。
 
@@ -387,7 +387,7 @@ graph TB
 - Locality-aware scheduling: 将相似请求调度到有缓存的节点
 - 支持 partial hit: 即使只命中部分 prefix 也能复用
 
-### 4.3 RetrievalAttention (Liu et al., 2024)
+### 4.3 [RetrievalAttention](https://arxiv.org/abs/2409.10516) (Liu et al., 2024)
 
 **方法核心：** 将长上下文 KV cache 视为检索问题。
 
@@ -402,10 +402,10 @@ graph TB
 将长序列分为固定大小的 chunks，每个 chunk 内做 full attention，chunk 间做 sparse/summary attention：
 
 $$
-O_i = \text{Attn}(Q_i, K_i, V_i) + \sum_{j < i} w_{ij} \cdot \text{Attn}(Q_i, \text{Summary}(K_j), \text{Summary}(V_j))
+O_i = \text{Attn}(Q_i, K_i, V_i) + \sum_{j < i} w_{ij} \cdot \text{Attn}(Q_i, \text{[Summary](https://arxiv.org/abs/2407.09111)}(K_j), \text{[Summary](https://arxiv.org/abs/2407.09111)}(V_j))
 $$
 
-代表方法：HOMER, Infini-attention。
+代表方法：[HOMER](https://arxiv.org/abs/2404.10308), [Infini-attention](https://arxiv.org/abs/2404.07143)。
 
 ---
 
@@ -415,34 +415,34 @@ $$
 
 | 方法 | 类型 | 压缩率 | 精度损失 (PPL↑) | 适用场景 | 工程复杂度 |
 |------|------|--------|-----------------|----------|------------|
-| KIVI | Quantization | 8x (2-bit) | +0.3 | 通用 | 中（需定制 kernel） |
-| KVQuant | Quantization | 5x (3-bit) | +0.1 | 超长上下文 | 高（NUQ codebook） |
-| Gear | Quant+LowRank | 6x (2.5-bit) | +0.2 | 通用 | 高（三组件） |
-| H2O | Eviction | 5x (20% budget) | +0.5-1.0 | Decode | 低 |
-| SnapKV | Eviction | 5-10x | +0.2-0.5 | 长上下文 prefill | 低 |
-| PyramidKV | Eviction | 5-8x | +0.3 | 多层模型 | 低 |
+| [KIVI](https://arxiv.org/abs/2402.02750) | Quantization | 8x (2-bit) | +0.3 | 通用 | 中（需定制 kernel） |
+| [KVQuant](https://arxiv.org/abs/2401.18079) | Quantization | 5x (3-bit) | +0.1 | 超长上下文 | 高（NUQ codebook） |
+| [Gear](https://arxiv.org/abs/2403.05527) | Quant+LowRank | 6x (2.5-bit) | +0.2 | 通用 | 高（三组件） |
+| [H2O](https://arxiv.org/abs/2306.14048) | Eviction | 5x (20% budget) | +0.5-1.0 | Decode | 低 |
+| [SnapKV](https://arxiv.org/abs/2404.14469) | Eviction | 5-10x | +0.2-0.5 | 长上下文 prefill | 低 |
+| [PyramidKV](https://arxiv.org/abs/2406.02069) | Eviction | 5-8x | +0.3 | 多层模型 | 低 |
 | CaM | Merging | 3-5x | +0.1-0.3 | 通用 | 中 |
-| StreamingLLM | Window | ∞ (固定 budget) | 任务相关 | 流式生成 | 极低 |
+| [StreamingLLM](https://arxiv.org/abs/2309.17453) | Window | ∞ (固定 budget) | 任务相关 | 流式生成 | 极低 |
 
 ### 5.2 调度方法对比
 
 | 方法 | 核心机制 | 吞吐提升 | 延迟影响 | 适用规模 |
 |------|----------|----------|----------|----------|
-| vLLM PagedAttention | Block paging | 2-4x | 无 | 单机多卡 |
+| [vLLM](https://github.com/vllm-project/vllm) [PagedAttention](https://arxiv.org/abs/2309.06180) | Block paging | 2-4x | 无 | 单机多卡 |
 | Prefix Caching | Hash-based sharing | 1.5-3x (共享场景) | 降低 TTFT | 单机/多机 |
-| Mooncake | P/D 分离 + RDMA | 2-5x | 增加 TTFT | 大规模集群 |
-| InfiniGen | CPU offload + prefetch | 支持更长上下文 | 略增 | 单机 |
-| MemServe | 跨请求复用 | 1.5-2x | 降低 TTFT | 多机 |
+| [Mooncake](https://arxiv.org/abs/2407.00079) | P/D 分离 + RDMA | 2-5x | 增加 TTFT | 大规模集群 |
+| [InfiniGen](https://arxiv.org/abs/2406.19707) | CPU offload + prefetch | 支持更长上下文 | 略增 | 单机 |
+| [MemServe](https://arxiv.org/abs/2406.17565) | 跨请求复用 | 1.5-2x | 降低 TTFT | 多机 |
 
 ### 5.3 长上下文方法对比
 
 | 方法 | 支持长度 | 精度保持 | 额外硬件需求 | 延迟开销 |
 |------|----------|----------|--------------|----------|
-| InfLLM | 1M+ | 好 | CPU 内存 | 中（retrieval） |
-| RetrievalAttention | 1M+ | 中 | CPU 内存 + 索引 | 中 |
-| RingAttention | 无限（多卡） | 无损 | 多 GPU | 通信开销 |
-| Star-Attention | 1M+ | 好 | 多 GPU | 低 |
-| YOCO | 1M+ | 好 | 无 | 低（架构改变） |
+| [InfLLM](https://arxiv.org/abs/2402.04617) | 1M+ | 好 | CPU 内存 | 中（retrieval） |
+| [RetrievalAttention](https://arxiv.org/abs/2409.10516) | 1M+ | 中 | CPU 内存 + 索引 | 中 |
+| [RingAttention](https://arxiv.org/abs/2310.01889) | 无限（多卡） | 无损 | 多 GPU | 通信开销 |
+| [Star-Attention](https://arxiv.org/abs/2411.17116) | 1M+ | 好 | 多 GPU | 低 |
+| [YOCO](https://arxiv.org/abs/2405.05254) | 1M+ | 好 | 无 | 低（架构改变） |
 
 ---
 

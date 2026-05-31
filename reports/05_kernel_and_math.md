@@ -36,7 +36,7 @@ $$
 \text{FLOPs}_{\text{causal}} = \frac{1}{2} \times 4N^2 d_h \times h = 2N^2 d
 $$
 
-但在 GPU 上，由于 warp 对齐和 tile 粒度，实际节省通常 < 50%。FlashAttention-2 通过 causal mask aware tiling 实现接近理论值的节省。
+但在 GPU 上，由于 warp 对齐和 tile 粒度，实际节省通常 < 50%。[FlashAttention-2](https://arxiv.org/abs/2307.08691) 通过 causal mask aware tiling 实现接近理论值的节省。
 
 ### 1.3 Roofline 定位
 
@@ -49,13 +49,13 @@ $$
 
 ---
 
-## 2. FlashAttention 系列
+## 2. [FlashAttention](https://arxiv.org/abs/2205.14135) 系列
 
-### 2.1 FlashAttention-1 (Dao et al., 2022)
+### 2.1 [FlashAttention](https://arxiv.org/abs/2205.14135)-1 (Dao et al., 2022)
 
 **核心问题：** Standard attention 需要将 $N \times N$ 的 attention matrix 写入 HBM，导致 $O(N^2)$ 的 HBM 访问。
 
-**核心思想：** Tiling + Online Softmax + Recomputation
+**核心思想：** Tiling + [Online Softmax](https://arxiv.org/abs/2112.05682) + Recomputation
 
 **算法：**
 
@@ -92,7 +92,7 @@ $$
 \text{HBM accesses} = O\left(\frac{N^2 d^2}{M}\right)
 $$
 
-其中 $M$ 为 SRAM 大小。对比 standard attention 的 $O(Nd + N^2)$，当 $M = O(Nd)$ 时 FlashAttention 的 IO 为 $O(N^2d / M) = O(N)$。
+其中 $M$ 为 SRAM 大小。对比 standard attention 的 $O(Nd + N^2)$，当 $M = O(Nd)$ 时 [FlashAttention](https://arxiv.org/abs/2205.14135) 的 IO 为 $O(N^2d / M) = O(N)$。
 
 **SRAM Tiling 约束推导：**
 
@@ -114,7 +114,7 @@ A100 SRAM = 192 KB, $d_h = 128$, FP16:
 **空间复杂度：** $O(N)$（无需存储完整 attention matrix）
 **HBM 带宽利用率：** 接近峰值，因为 kernel 是 compute-bound
 
-### 2.2 FlashAttention-2 (Dao, 2023)
+### 2.2 [FlashAttention-2](https://arxiv.org/abs/2307.08691) (Dao, 2023)
 
 **改进点：**
 
@@ -130,7 +130,7 @@ A100 SRAM = 192 KB, $d_h = 128$, FP16:
 
 **Causal mask 优化：** 跳过完全被 mask 的 tile（右上角），节省约 50% 计算。
 
-### 2.3 FlashAttention-3 (Shah et al., 2024)
+### 2.3 [FlashAttention-3](https://arxiv.org/abs/2407.08608) (Shah et al., 2024)
 
 **针对 Hopper (H100) 架构的优化：**
 
@@ -155,13 +155,13 @@ A100 SRAM = 192 KB, $d_h = 128$, FP16:
 | 方法 | Arithmetic Intensity | A100 定位 | H100 定位 |
 |------|---------------------|-----------|-----------|
 | Standard Attention (实际) | ~4 ops/byte | Memory-bound | Memory-bound |
-| FlashAttention-1 | ~128 ops/byte | Compute-bound | Compute-bound |
-| FlashAttention-2 | ~200 ops/byte | Compute-bound | Compute-bound |
-| FlashAttention-3 (FP8) | ~400 ops/byte | Compute-bound | Compute-bound |
+| [FlashAttention](https://arxiv.org/abs/2205.14135)-1 | ~128 ops/byte | Compute-bound | Compute-bound |
+| [FlashAttention-2](https://arxiv.org/abs/2307.08691) | ~200 ops/byte | Compute-bound | Compute-bound |
+| [FlashAttention-3](https://arxiv.org/abs/2407.08608) (FP8) | ~400 ops/byte | Compute-bound | Compute-bound |
 
 ---
 
-## 3. FlashDecoding / FlashDecoding++
+## 3. [FlashDecoding](https://crfm.stanford.edu/2023/10/12/flashdecoding.html) / [FlashDecoding++](https://arxiv.org/abs/2311.01282)
 
 ### 3.1 Decode 阶段的瓶颈
 
@@ -172,9 +172,9 @@ Decode 阶段：$Q \in \mathbb{R}^{1 \times d_h}$（单 token），$K, V \in \ma
 - Arithmetic Intensity: $4Nd_h / (2Nd_h \times 2) = 1$ op/byte (FP16)
 - **纯 memory-bound 操作**
 
-FlashAttention 在 decode 时的问题：外层循环只有 batch_size × num_heads 个并行单元，当 batch 小时 GPU 利用率低。
+[FlashAttention](https://arxiv.org/abs/2205.14135) 在 decode 时的问题：外层循环只有 batch_size × num_heads 个并行单元，当 batch 小时 GPU 利用率低。
 
-### 3.2 Flash-Decoding (Dao et al., 2023)
+### 3.2 [Flash-Decoding](https://crfm.stanford.edu/2023/10/12/flashdecoding.html) (Dao et al., 2023)
 
 **核心思想：** 在 sequence length 维度增加并行度。
 
@@ -199,7 +199,7 @@ Step 2: Reduce across splits (log-sum-exp correction):
 **空间复杂度：** $O(S \times d_h)$ 额外空间存储 partial results
 **带宽利用率：** 接近 HBM 峰值带宽（memory-bound kernel 的最优情况）
 
-### 3.3 FlashDecoding++ (Tsinghua & Infinigence-AI, 2023)
+### 3.3 [FlashDecoding++](https://arxiv.org/abs/2311.01282) (Tsinghua & Infinigence-AI, 2023)
 
 **改进：**
 
@@ -209,7 +209,7 @@ Step 2: Reduce across splits (log-sum-exp correction):
 
 2. **Asynchronous softmax with double buffering**
 
-3. **支持 GQA 的优化 layout**
+3. **支持 [GQA](https://arxiv.org/abs/2305.13245) 的优化 layout**
 
 ---
 
@@ -220,8 +220,8 @@ Step 2: Reduce across splits (log-sum-exp correction):
 | 方法 | KV Heads | 参数量 | KV Cache 大小 |
 |------|----------|--------|---------------|
 | MHA (Multi-Head Attention) | $h$ | $3hd_h \cdot d$ | $2 \times h \times d_h \times N \times B$ |
-| MQA (Multi-Query Attention) | 1 | $(h+2)d_h \cdot d$ | $2 \times 1 \times d_h \times N \times B$ |
-| GQA (Grouped-Query Attention) | $g$ | $(h+2g)d_h \cdot d$ | $2 \times g \times d_h \times N \times B$ |
+| [MQA](https://arxiv.org/abs/1911.02150) (Multi-Query Attention) | 1 | $(h+2)d_h \cdot d$ | $2 \times 1 \times d_h \times N \times B$ |
+| [GQA](https://arxiv.org/abs/2305.13245) (Grouped-Query Attention) | $g$ | $(h+2g)d_h \cdot d$ | $2 \times g \times d_h \times N \times B$ |
 
 ### 4.2 KV Cache 内存公式
 
@@ -234,13 +234,13 @@ $$
 | 模型 | $n_{\text{kv\_heads}}$ | $d_h$ | Layers | KV Cache |
 |------|------------------------|--------|--------|----------|
 | Llama-2-7B (MHA) | 32 | 128 | 32 | 2 × 32 × 128 × 4096 × 32 × 2 = 2 GB |
-| Llama-2-7B (GQA, 假设 g=8) | 8 | 128 | 32 | 512 MB |
-| Llama-2-70B (GQA, g=8) | 8 | 128 | 80 | 1.28 GB |
-| DeepSeek-V2 (MLA) | 等效 ~1 | 512 | 60 | ~500 MB |
+| Llama-2-7B ([GQA](https://arxiv.org/abs/2305.13245), 假设 g=8) | 8 | 128 | 32 | 512 MB |
+| Llama-2-70B ([GQA](https://arxiv.org/abs/2305.13245), g=8) | 8 | 128 | 80 | 1.28 GB |
+| [DeepSeek-V2](https://arxiv.org/abs/2405.04434) (MLA) | 等效 ~1 | 512 | 60 | ~500 MB |
 
-### 4.3 GQA 的 Compute 影响
+### 4.3 [GQA](https://arxiv.org/abs/2305.13245) 的 Compute 影响
 
-GQA 不改变 attention 的 FLOPs（Q 仍然是 $h$ 头），只减少 KV cache 的内存和带宽需求：
+[GQA](https://arxiv.org/abs/2305.13245) 不改变 attention 的 FLOPs（Q 仍然是 $h$ 头），只减少 KV cache 的内存和带宽需求：
 
 - Prefill: 计算量不变，但 KV projection 参数减少
 - Decode: 带宽需求降低 $h/g$ 倍（读取更少的 KV cache）
@@ -254,11 +254,11 @@ $$
 \text{Occupancy} = \frac{\text{Active Warps per SM}}{\text{Max Warps per SM}}
 $$
 
-GQA 使得每个 thread block 的 shared memory 需求从 $(2h + 1) \times B_c \times d_h$ 降至 $(h + g + 1) \times B_c \times d_h$。
+[GQA](https://arxiv.org/abs/2305.13245) 使得每个 thread block 的 shared memory 需求从 $(2h + 1) \times B_c \times d_h$ 降至 $(h + g + 1) \times B_c \times d_h$。
 
 ---
 
-## 5. PagedAttention
+## 5. [PagedAttention](https://arxiv.org/abs/2309.06180)
 
 ### 5.1 问题背景
 
@@ -308,7 +308,7 @@ Beam 2: [Block A] → [Block B] → [Block D]  (fork at step 3)
 
 ---
 
-## 6. RadixAttention
+## 6. [RadixAttention](https://arxiv.org/abs/2312.07104)
 
 ### 6.1 Radix Tree for Prefix Sharing
 
@@ -355,7 +355,7 @@ $$
 
 ## 7. Sparse Attention
 
-### 7.1 StreamingLLM — Attention Sink (Xiao et al., 2023)
+### 7.1 [StreamingLLM](https://arxiv.org/abs/2309.17453) — Attention Sink (Xiao et al., 2023)
 
 **观察：** Attention score 集中在：
 1. 前几个 token（"attention sink"），无论语义相关性
@@ -374,7 +374,7 @@ $$
 
 **精度损失：** 对于需要远距离依赖的任务（如 retrieval）有明显退化。
 
-### 7.2 H2O — Heavy Hitter Oracle (Zhang et al., 2023)
+### 7.2 [H2O](https://arxiv.org/abs/2306.14048) — Heavy Hitter Oracle (Zhang et al., 2023)
 
 **观察：** 少量 token 累积了大部分 attention score（Heavy Hitters）。
 
@@ -391,7 +391,7 @@ $$
 - 空间：$O((k+w) \times d_h)$
 - 压缩率：可达 5-10x
 
-### 7.3 Quest (MIT Han Lab, 2024)
+### 7.3 [Quest](https://arxiv.org/abs/2406.10774) (MIT Han Lab, 2024)
 
 **核心思想：** Query-aware sparsity — 根据当前 query 动态选择相关的 KV cache pages。
 
@@ -410,7 +410,7 @@ $$
 - Attention computation: $O(k \times p \times d_h)$
 - 总计: $O(N d_h / p + kp d_h)$，当 $kp \ll N$ 时显著加速
 
-### 7.4 MInference (Microsoft, 2024)
+### 7.4 [MInference](https://arxiv.org/abs/2407.02490) (Microsoft, 2024)
 
 **观察：** Long-context prefill 中 attention 呈现三种稀疏模式：
 1. **A-shape：** 前几个 token 获得高 attention（类似 sink）
@@ -421,7 +421,7 @@ $$
 
 **加速比：** Prefill 阶段 1M context 下约 10x speedup。
 
-### 7.5 SampleAttention (2024)
+### 7.5 [SampleAttention](https://arxiv.org/abs/2406.15486) (2024)
 
 **方法：** 两阶段近似：
 1. 用低精度/低维度的 query-key 近似快速筛选 candidate tokens
@@ -443,11 +443,11 @@ $$
 
 | 方法 | 时间复杂度 | 空间复杂度 | 适用阶段 | 精度保持 |
 |------|-----------|-----------|----------|----------|
-| StreamingLLM | $O((k+w)d_h)$ | $O((k+w)d_h)$ | Decode | 中（丢失远距离信息） |
-| H2O | $O((k+w)d_h)$ | $O((k+w)d_h)$ | Decode | 较好 |
-| Quest | $O(Nd_h/p + kpd_h)$ | $O(Nd_h)$ | Decode | 好（有 bound 保证） |
-| MInference | $O(\alpha N^2 d_h)$, $\alpha \ll 1$ | $O(N d_h)$ | Prefill | 好（pattern-aware） |
-| SampleAttention | $O(Nd' + kd_h)$ | $O(Nd_h)$ | Both | 好 |
+| [StreamingLLM](https://arxiv.org/abs/2309.17453) | $O((k+w)d_h)$ | $O((k+w)d_h)$ | Decode | 中（丢失远距离信息） |
+| [H2O](https://arxiv.org/abs/2306.14048) | $O((k+w)d_h)$ | $O((k+w)d_h)$ | Decode | 较好 |
+| [Quest](https://arxiv.org/abs/2406.10774) | $O(Nd_h/p + kpd_h)$ | $O(Nd_h)$ | Decode | 好（有 bound 保证） |
+| [MInference](https://arxiv.org/abs/2407.02490) | $O(\alpha N^2 d_h)$, $\alpha \ll 1$ | $O(N d_h)$ | Prefill | 好（pattern-aware） |
+| [SampleAttention](https://arxiv.org/abs/2406.15486) | $O(Nd' + kd_h)$ | $O(Nd_h)$ | Both | 好 |
 
 **Roofline 定位：**
 - 所有 sparse attention 方法在 decode 阶段仍为 memory-bound（减少的是数据量而非计算密度）
@@ -463,7 +463,7 @@ $$
 \text{Occupancy} = \min\left(\frac{\text{Max Blocks per SM}}{\lceil \text{Registers per Block} / \text{Registers per SM} \rceil}, \frac{\text{Shared Mem per SM}}{\text{Shared Mem per Block}}\right)
 $$
 
-FlashAttention kernel 的典型配置（A100）：
+[FlashAttention](https://arxiv.org/abs/2205.14135) kernel 的典型配置（A100）：
 - Shared memory per block: 96-164 KB（A100 max 164 KB configurable）
 - Registers per thread: 128-255
 - Threads per block: 128-256（4-8 warps）
@@ -476,21 +476,21 @@ $$
 $$
 
 A100: Ridge point = 156 ops/byte (FP16), 312 ops/byte (FP8/INT8)
-H100: Ridge point = 267 ops/byte (FP16), 534 ops/byte (FP8)
+H100: Ridge point = 267 ops/byte (FP16), 534 ops/byte ([FP8](https://arxiv.org/abs/2209.05433))
 
 | Kernel | AI (ops/byte) | A100 Bound | H100 Bound |
 |--------|---------------|------------|------------|
 | Standard Attn (materialized) | ~4 | Memory | Memory |
-| FlashAttention Prefill | ~128-200 | Compute | Compute |
+| [FlashAttention](https://arxiv.org/abs/2205.14135) Prefill | ~128-200 | Compute | Compute |
 | Decode (single query) | ~1 | Memory | Memory |
-| Flash-Decoding | ~1 | Memory | Memory |
+| [Flash-Decoding](https://crfm.stanford.edu/2023/10/12/flashdecoding.html) | ~1 | Memory | Memory |
 | GEMM (large) | ~128-256 | Compute | Compute |
 
 ---
 
 ## 附录：Mermaid 图
 
-### FlashAttention Tiling 流程
+### [FlashAttention](https://arxiv.org/abs/2205.14135) Tiling 流程
 
 ```mermaid
 graph TD

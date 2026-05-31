@@ -24,10 +24,10 @@
 
 | 项目 | 难度 | 前置知识 | 资源 | 预期产出 |
 |------|------|----------|------|----------|
-| FlashAttention-2 forward | L3 | CUDA, tiling | 1×A100 | 理解 IO-aware attention |
-| FlashDecoding | L3 | FlashAttention, split-K | 1×A100 | Decode 加速 |
-| PagedAttention kernel | L4 | vLLM 源码, CUDA | 1×A100 | 理解 paged memory |
-| Triton FlashAttention | L2 | Triton, Python | 1×A100 | 快速原型 |
+| [FlashAttention-2](https://arxiv.org/abs/2307.08691) forward | L3 | CUDA, tiling | 1×A100 | 理解 IO-aware attention |
+| [FlashDecoding](https://crfm.stanford.edu/2023/10/12/flashdecoding.html) | L3 | [FlashAttention](https://arxiv.org/abs/2205.14135), split-K | 1×A100 | Decode 加速 |
+| [PagedAttention](https://arxiv.org/abs/2309.06180) kernel | L4 | vLLM 源码, CUDA | 1×A100 | 理解 paged memory |
+| Triton [FlashAttention](https://arxiv.org/abs/2205.14135) | L2 | Triton, Python | 1×A100 | 快速原型 |
 
 **复现路线**：
 ```
@@ -41,18 +41,18 @@
 
 | 项目 | 难度 | 前置知识 | 资源 | 预期产出 |
 |------|------|----------|------|----------|
-| H2O (Heavy Hitter Oracle) | L2 | Attention score 分析 | 1×A100 | KV eviction 基线 |
-| SnapKV | L2 | Attention pattern | 1×A100 | 观察窗口压缩 |
-| KIVI (KV quantization) | L2 | 量化基础 | 1×A100 | KV INT4 |
-| vLLM Block Manager | L3 | vLLM 源码 | 1×A100 | 内存管理 |
+| [H2O](https://arxiv.org/abs/2306.14048) (Heavy Hitter Oracle) | L2 | Attention score 分析 | 1×A100 | KV eviction 基线 |
+| [SnapKV](https://arxiv.org/abs/2404.14469) | L2 | Attention pattern | 1×A100 | 观察窗口压缩 |
+| [KIVI](https://arxiv.org/abs/2402.02750) (KV quantization) | L2 | 量化基础 | 1×A100 | KV INT4 |
+| [vLLM](https://github.com/vllm-project/vllm) Block Manager | L3 | [vLLM](https://github.com/vllm-project/vllm) 源码 | 1×A100 | 内存管理 |
 
-### 2.3 Speculative Decoding（L2-L3）
+### 2.3 [Speculative Decoding](https://arxiv.org/abs/2211.17192)（L2-L3）
 
 | 项目 | 难度 | 前置知识 | 资源 | 预期产出 |
 |------|------|----------|------|----------|
-| 标准 Speculative Decoding | L2 | Rejection sampling | 1×A100 | 基础框架 |
-| Medusa heads 训练 | L3 | 模型微调 | 2×A100 | Self-draft |
-| EAGLE 实现 | L3 | Medusa + autoregressive | 2×A100 | 改进 draft |
+| 标准 [Speculative Decoding](https://arxiv.org/abs/2211.17192) | L2 | Rejection sampling | 1×A100 | 基础框架 |
+| [Medusa](https://arxiv.org/abs/2401.10774) heads 训练 | L3 | 模型微调 | 2×A100 | Self-draft |
+| [EAGLE](https://arxiv.org/abs/2401.15077) 实现 | L3 | [Medusa](https://arxiv.org/abs/2401.10774) + autoregressive | 2×A100 | 改进 draft |
 | Tree attention | L3 | Custom attention mask | 1×A100 | Tree verification |
 
 **复现路线**：
@@ -67,17 +67,17 @@
 
 | 项目 | 难度 | 前置知识 | 资源 | 预期产出 |
 |------|------|----------|------|----------|
-| GPTQ 量化流程 | L2 | Hessian, OBQ | 1×A100 | W4 模型 |
-| AWQ 量化 | L2 | Activation-aware scaling | 1×A100 | W4 模型 |
-| SmoothQuant | L2 | Per-channel scaling | 1×A100 | W8A8 |
+| [GPTQ](https://arxiv.org/abs/2210.17323) 量化流程 | L2 | Hessian, OBQ | 1×A100 | W4 模型 |
+| [AWQ](https://arxiv.org/abs/2306.00978) 量化 | L2 | Activation-aware scaling | 1×A100 | W4 模型 |
+| [SmoothQuant](https://arxiv.org/abs/2211.10438) | L2 | Per-channel scaling | 1×A100 | W8A8 |
 | Marlin kernel | L4 | CUDA, 4-bit GEMM | 1×A100 | 加速 kernel |
 
 ### 2.5 Serving 系统（L3-L5）
 
 | 项目 | 难度 | 前置知识 | 资源 | 预期产出 |
 |------|------|----------|------|----------|
-| Mini vLLM | L3 | Python, PagedAttention | 1×A100 | 理解 serving 架构 |
-| Continuous Batching | L3 | Scheduler 设计 | 1×A100 | 动态 batching |
+| Mini [vLLM](https://github.com/vllm-project/vllm) | L3 | Python, [PagedAttention](https://arxiv.org/abs/2309.06180) | 1×A100 | 理解 serving 架构 |
+| [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) | L3 | Scheduler 设计 | 1×A100 | 动态 batching |
 | Prefix Caching (Radix Tree) | L3 | 数据结构 | 1×A100 | Cache 管理 |
 | P/D Disaggregation | L4 | 分布式系统 | 4×A100 | 分离架构 |
 

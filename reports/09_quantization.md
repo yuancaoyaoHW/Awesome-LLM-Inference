@@ -69,7 +69,7 @@ $$
 
 ## 2. Weight-Only Quantization
 
-### 2.1 GPTQ (Frantar et al., 2022)
+### 2.1 [GPTQ](https://arxiv.org/abs/2210.17323) (Frantar et al., 2022)
 
 **问题定义：** 将 OBQ 的 $O(d^3)$ 复杂度降低到可处理大模型的水平。
 
@@ -107,11 +107,11 @@ $$
 - 需要 calibration data（通常 128 samples from C4）
 - Hessian 计算需要足够的 calibration samples 保证数值稳定
 - Group quantization 的 Hessian 更新需要特殊处理
-- 不同实现（AutoGPTQ, GPTQ-for-LLaMA）的精度可能有差异
+- 不同实现（Auto[GPTQ](https://arxiv.org/abs/2210.17323), [GPTQ](https://arxiv.org/abs/2210.17323)-for-LLaMA）的精度可能有差异
 
-**加速 kernel：** Marlin kernel 实现 GPTQ W4A16 的高效 GEMM，在 A100 上达到接近 FP16 的吞吐。
+**加速 kernel：** Marlin kernel 实现 [GPTQ](https://arxiv.org/abs/2210.17323) W4A16 的高效 GEMM，在 A100 上达到接近 FP16 的吞吐。
 
-### 2.2 AWQ (Lin et al., 2023)
+### 2.2 [AWQ](https://arxiv.org/abs/2306.00978) (Lin et al., 2023)
 
 **问题定义：** 不依赖 Hessian 的简单高效 weight quantization。
 
@@ -140,20 +140,20 @@ $$
 $\alpha$ 通过 grid search 确定（通常 $\alpha \approx 0.5$）。
 
 **实验指标：**
-- Llama-2-7B W4g128: PPL 5.60（优于 GPTQ 的 5.63）
-- 量化速度比 GPTQ 快 10x+（无需 Hessian 逆）
+- Llama-2-7B W4g128: PPL 5.60（优于 [GPTQ](https://arxiv.org/abs/2210.17323) 的 5.63）
+- 量化速度比 [GPTQ](https://arxiv.org/abs/2210.17323) 快 10x+（无需 Hessian 逆）
 - 支持 W3 量化，PPL 6.24
 
 **工程可复现难点：**
 - Scaling factor 的 grid search 范围和粒度影响结果
 - 需要 calibration data 计算 activation statistics
-- 与 GPTQ 可组合使用（AWQ scaling + GPTQ rounding）
+- 与 [GPTQ](https://arxiv.org/abs/2210.17323) 可组合使用（AWQ scaling + [GPTQ](https://arxiv.org/abs/2210.17323) rounding）
 
-### 2.3 QuIP / QuIP# (Chee et al., 2023-2024)
+### 2.3 [QuIP](https://arxiv.org/abs/2307.13304) / [QuIP#](https://arxiv.org/abs/2402.04396) (Chee et al., 2023-2024)
 
 **问题定义：** 实现 2-bit weight quantization 而不显著损失精度。
 
-**方法核心（QuIP）：**
+**方法核心（[QuIP](https://arxiv.org/abs/2307.13304)）：**
 
 Incoherence Processing: 通过随机正交变换使 weight matrix 的元素分布更均匀。
 
@@ -163,7 +163,7 @@ $$
 
 推理时：$\hat{W}x = U^T Q(UWV^T) V x$
 
-**方法核心（QuIP#）：**
+**方法核心（[QuIP#](https://arxiv.org/abs/2402.04396)）：**
 
 1. 使用 Hadamard matrix 替代随机正交矩阵（计算更快）
 2. E8 lattice codebook 替代 uniform quantization（更优的 rate-distortion）
@@ -172,7 +172,7 @@ $$
 **E8 Lattice：** 8 维空间中最密堆积格，每个 lattice point 编码 8 个权重值，有效 bit rate 约 2 bits/weight。
 
 **实验指标：**
-- Llama-2-7B 2-bit: PPL 7.85（QuIP# with E8）
+- Llama-2-7B 2-bit: PPL 7.85（[QuIP#](https://arxiv.org/abs/2402.04396) with E8）
 - Llama-2-70B 2-bit: PPL 4.15
 
 **工程可复现难点：**
@@ -180,7 +180,7 @@ $$
 - Hadamard transform 在非 2 的幂维度需要 padding
 - 推理时的 dequantization 开销较大
 
-### 2.4 AQLM (Egiazarian et al., 2024)
+### 2.4 [AQLM](https://arxiv.org/abs/2401.06118) (Egiazarian et al., 2024)
 
 **问题定义：** 使用 additive quantization 实现极低比特量化。
 
@@ -202,7 +202,7 @@ $$
 
 ## 3. Weight-Activation Quantization
 
-### 3.1 SmoothQuant (Xiao et al., 2022)
+### 3.1 [SmoothQuant](https://arxiv.org/abs/2211.10438) (Xiao et al., 2022)
 
 **问题定义：** Activation 中存在大量 outlier（某些 channel 值远大于其他），直接量化 activation 精度损失大。
 
@@ -227,7 +227,7 @@ $\alpha = 0.5$ 时等价于平衡 activation 和 weight 的量化难度。
 **实验指标：**
 - OPT-175B W8A8: 精度无损（< 0.1% degradation）
 - Llama-2-7B W8A8: PPL 5.48（FP16: 5.47）
-- 推理加速：1.5x（利用 INT8 Tensor Core）
+- 推理加速：1.5x（利用 INT8 [Tensor Core](https://arxiv.org/abs/1803.04014)）
 
 **工程可复现难点：**
 - $\alpha$ 的最优值因模型和层而异
@@ -245,7 +245,7 @@ graph LR
     style D fill:#9f9,stroke:#333
 ```
 
-### 3.2 LLM.int8() (Dettmers et al., 2022)
+### 3.2 [LLM.int8()](https://arxiv.org/abs/2208.07339) (Dettmers et al., 2022)
 
 **问题定义：** 处理 activation 中的 extreme outlier（某些 channel 值 > 100x 均值）。
 
@@ -267,7 +267,7 @@ $$
 
 **工程难点：** Outlier channel 的比例通常 < 1%，但 mixed-precision 的 kernel 实现需要 scatter/gather 操作。
 
-### 3.3 Atom (Zhao et al., 2024)
+### 3.3 [Atom](https://arxiv.org/abs/2310.19102) (Zhao et al., 2024)
 
 **问题定义：** 实现 W4A4 的高效推理。
 
@@ -279,9 +279,9 @@ $$
 
 **实验指标：** Llama-2-7B W4A4，throughput 提升 2.5x vs FP16。
 
-### 3.4 QServe (Lin et al., 2024)
+### 3.4 [QServe](https://arxiv.org/abs/2405.04532) (Lin et al., 2024)
 
-**问题定义：** W4A8KV4 的系统级量化方案。
+**问题定义：** [W4A8KV4](https://arxiv.org/abs/2405.04532) 的系统级量化方案。
 
 **方法核心（QoQ - Quattuor-Octo-Quattuor）：**
 
@@ -293,7 +293,7 @@ $$
 **SmoothAttention：** 对 attention 的 K 做 smoothing，减少 KV cache 量化误差。
 
 **实验指标：**
-- Llama-3-8B: 1.2x throughput vs TensorRT-LLM FP16
+- Llama-3-8B: 1.2x throughput vs [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) FP16
 - Llama-3-70B (4×A100): 2.4x throughput vs FP16
 - 精度：大部分任务 < 1% degradation
 
@@ -304,9 +304,9 @@ $$
 
 ---
 
-## 4. FP8 Quantization
+## 4. [FP8](https://arxiv.org/abs/2209.05433) Quantization
 
-### 4.1 FP8 格式
+### 4.1 [FP8](https://arxiv.org/abs/2209.05433) 格式
 
 | 格式 | 符号位 | 指数位 | 尾数位 | 范围 | 精度 | 用途 |
 |------|--------|--------|--------|------|------|------|
@@ -336,11 +336,11 @@ $$
 
 每个 token 独立计算 scale，精度更高但需要 online calibration。
 
-**Delayed scaling（TensorRT-LLM）：**
+**Delayed scaling（[TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)）：**
 
 使用前一次 iteration 的 amax 作为当前 scale（避免额外的 reduction kernel）。
 
-### 4.3 TensorRT-LLM FP8 Workflow
+### 4.3 [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) FP8 Workflow
 
 ```mermaid
 graph TD
@@ -355,13 +355,13 @@ graph TD
     H --> I[Output cast to FP16/BF16]
 ```
 
-**性能：** H100 FP8 Tensor Core 提供 1978 TFLOPS（vs FP16 989 TFLOPS），理论 2x 加速。
+**性能：** H100 [FP8](https://arxiv.org/abs/2209.05433) [Tensor Core](https://arxiv.org/abs/1803.04014) 提供 1978 TFLOPS（vs FP16 989 TFLOPS），理论 2x 加速。
 
 **实际加速：** 1.5-1.8x（受限于 memory-bound 操作和非 GEMM 计算）。
 
-### 4.4 FP8 vs INT8 对比
+### 4.4 [FP8](https://arxiv.org/abs/2209.05433) vs INT8 对比
 
-| 维度 | FP8 (E4M3) | INT8 |
+| 维度 | [FP8](https://arxiv.org/abs/2209.05433) (E4M3) | INT8 |
 |------|------------|------|
 | 动态范围 | 大（指数表示） | 小（线性） |
 | 精度 | 中（3-bit mantissa） | 高（8-bit 均匀） |
@@ -374,7 +374,7 @@ graph TD
 
 ## 5. KV Cache Quantization
 
-### 5.1 KIVI (Liu et al., 2024)
+### 5.1 [KIVI](https://arxiv.org/abs/2402.02750) (Liu et al., 2024)
 
 （详见 reports/07_kv_cache.md §2.1.1）
 
@@ -382,7 +382,7 @@ graph TD
 - Key: per-channel INT2, $s_k \in \mathbb{R}^{d_h}$
 - Value: per-token INT2, $s_v \in \mathbb{R}^{N}$
 
-### 5.2 Gear (Kang et al., 2024)
+### 5.2 [Gear](https://arxiv.org/abs/2403.05527) (Kang et al., 2024)
 
 （详见 reports/07_kv_cache.md §2.1.3）
 
@@ -392,7 +392,7 @@ $$
 \text{KV} \approx \underbrace{UV^T}_{\text{low-rank}} + \underbrace{Q(\text{KV} - UV^T)}_{\text{quantized residual}} + \underbrace{S}_{\text{sparse outlier}}
 $$
 
-### 5.3 NexusQuant (2025)
+### 5.3 [NexusQuant (2025)](https://arxiv.org/abs/2505.00949)
 
 **问题定义：** Training-free KV cache compression via vector quantization。
 
@@ -417,18 +417,18 @@ $$
 
 ### 6.1 各框架支持的量化格式
 
-| 框架 | W4A16 | W8A8 | W4A8 | FP8 | KV Quant | 主要 kernel |
+| 框架 | W4A16 | W8A8 | W4A8 | [FP8](https://arxiv.org/abs/2209.05433) | KV Quant | 主要 kernel |
 |------|-------|------|------|-----|----------|-------------|
-| vLLM | GPTQ, AWQ | SmoothQuant | ✗ | ✓ (H100) | FP8 | Marlin, CUTLASS |
-| TensorRT-LLM | AWQ, GPTQ | SmoothQuant | ✓ | ✓ | INT8/FP8 | 自研 |
-| llama.cpp | GGUF Q2-Q8 | ✗ | ✗ | ✗ | ✗ | 自研 (CPU/Metal) |
-| SGLang | GPTQ, AWQ | ✓ | ✗ | ✓ | ✓ | Marlin, FlashInfer |
-| DeepSpeed | ZeroQuant | ✓ | ✗ | ✓ | ✗ | 自研 |
-| HuggingFace | bitsandbytes, GPTQ, AWQ | ✓ | ✗ | ✓ | ✗ | 各库 kernel |
+| [vLLM](https://github.com/vllm-project/vllm) | GPTQ, AWQ | [SmoothQuant](https://arxiv.org/abs/2211.10438) | ✗ | ✓ (H100) | FP8 | Marlin, [CUTLASS](https://github.com/NVIDIA/cutlass) |
+| [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) | AWQ, GPTQ | [SmoothQuant](https://arxiv.org/abs/2211.10438) | ✓ | ✓ | INT8/FP8 | 自研 |
+| [llama.cpp](https://github.com/ggerganov/llama.cpp) | GGUF Q2-Q8 | ✗ | ✗ | ✗ | ✗ | 自研 (CPU/Metal) |
+| [SGLang](https://github.com/sgl-project/sglang) | GPTQ, AWQ | ✓ | ✗ | ✓ | ✓ | Marlin, [FlashInfer](https://github.com/flashinfer-ai/flashinfer) |
+| [DeepSpeed](https://github.com/microsoft/DeepSpeed) | [ZeroQuant](https://arxiv.org/abs/2206.01861) | ✓ | ✗ | ✓ | ✗ | 自研 |
+| HuggingFace | bitsandbytes, [GPTQ](https://arxiv.org/abs/2210.17323), AWQ | ✓ | ✗ | ✓ | ✗ | 各库 kernel |
 
-### 6.2 GGUF 格式详解（llama.cpp）
+### 6.2 [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) 格式详解（[llama.cpp](https://github.com/ggerganov/llama.cpp)）
 
-GGUF (GPT-Generated Unified Format) 是 llama.cpp 使用的模型文件格式，支持多种量化类型：
+[GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) (GPT-Generated Unified Format) 是 [llama.cpp](https://github.com/ggerganov/llama.cpp) 使用的模型文件格式，支持多种量化类型：
 
 | 类型 | Bits/Weight | 方法 | 精度 (7B PPL) | 速度 |
 |------|-------------|------|---------------|------|
@@ -450,7 +450,7 @@ $$
 \text{Block} = [\underbrace{d}_{\text{scale, FP16}}][\underbrace{m}_{\text{min, FP16}}][\underbrace{q_0, q_1, ...}_{\text{quantized weights}}]
 $$
 
-### 6.3 Marlin Kernel
+### 6.3 [Marlin](https://github.com/IST-DASLab/marlin) Kernel
 
 **问题定义：** GPTQ/AWQ W4A16 的 GEMM 在 GPU 上效率低（dequantize 开销大）。
 
@@ -458,7 +458,7 @@ $$
 
 1. Weight 预处理为 GPU-friendly layout（interleaved for coalesced access）
 2. Asynchronous dequantization: 在 GEMM 的 global load 阶段做 dequant
-3. 利用 Tensor Core 的 FP16 GEMM，weight 在 shared memory 中 on-the-fly dequant
+3. 利用 [Tensor Core](https://arxiv.org/abs/1803.04014) 的 FP16 GEMM，weight 在 shared memory 中 on-the-fly dequant
 
 **性能：**
 - A100 上 W4A16 达到 FP16 GEMM 吞吐的 80%+
@@ -517,14 +517,14 @@ graph TD
 | 方法 | Bits | PPL (Wiki2) | 相对 FP16 | Throughput 倍数 | 显存节省 |
 |------|------|-------------|-----------|----------------|----------|
 | FP16 (baseline) | 16 | 5.47 | 0% | 1.0x | 0% |
-| W8A8 SmoothQuant | 8 | 5.48 | +0.2% | 1.5x | 50% |
-| FP8 E4M3 | 8 | 5.48 | +0.2% | 1.8x (H100) | 50% |
-| W4A16 GPTQ g128 | 4 | 5.63 | +2.9% | 2.0x | 75% |
-| W4A16 AWQ g128 | 4 | 5.60 | +2.4% | 2.0x | 75% |
-| W4A8 QServe | 4/8 | 5.65 | +3.3% | 2.5x | 62% |
-| W3A16 AWQ | 3 | 6.24 | +14% | 2.5x | 81% |
-| W2A16 QuIP# | 2 | 7.85 | +43% | 2.0x* | 87% |
-| W2A16 AQLM | 2 | 8.32 | +52% | 1.8x* | 87% |
+| W8A8 [SmoothQuant](https://arxiv.org/abs/2211.10438) | 8 | 5.48 | +0.2% | 1.5x | 50% |
+| [FP8](https://arxiv.org/abs/2209.05433) E4M3 | 8 | 5.48 | +0.2% | 1.8x (H100) | 50% |
+| W4A16 [GPTQ](https://arxiv.org/abs/2210.17323) g128 | 4 | 5.63 | +2.9% | 2.0x | 75% |
+| W4A16 [AWQ](https://arxiv.org/abs/2306.00978) g128 | 4 | 5.60 | +2.4% | 2.0x | 75% |
+| W4A8 [QServe](https://arxiv.org/abs/2405.04532) | 4/8 | 5.65 | +3.3% | 2.5x | 62% |
+| W3A16 [AWQ](https://arxiv.org/abs/2306.00978) | 3 | 6.24 | +14% | 2.5x | 81% |
+| W2A16 [QuIP#](https://arxiv.org/abs/2402.04396) | 2 | 7.85 | +43% | 2.0x* | 87% |
+| W2A16 [AQLM](https://arxiv.org/abs/2401.06118) | 2 | 8.32 | +52% | 1.8x* | 87% |
 
 *注：2-bit 方法的 dequantization 开销较大，实际加速受限。
 
@@ -532,19 +532,19 @@ graph TD
 
 | 场景 | 推荐方案 | 理由 |
 |------|----------|------|
-| 精度优先，H100 可用 | FP8 | 几乎无损，硬件原生支持 |
-| 精度优先，A100 | W8A8 SmoothQuant | 成熟，精度好 |
-| 吞吐优先，精度可接受 | W4A16 AWQ + Marlin | 高吞吐，精度损失小 |
-| 显存极度受限 | W4 GPTQ + KV4 | 最大化 batch size |
-| 边缘设备/CPU | GGUF Q4_K_M | llama.cpp 生态完善 |
-| 研究/极限压缩 | QuIP# 2-bit | 最低 bit rate |
+| 精度优先，H100 可用 | [FP8](https://arxiv.org/abs/2209.05433) | 几乎无损，硬件原生支持 |
+| 精度优先，A100 | W8A8 [SmoothQuant](https://arxiv.org/abs/2211.10438) | 成熟，精度好 |
+| 吞吐优先，精度可接受 | W4A16 [AWQ](https://arxiv.org/abs/2306.00978) + Marlin | 高吞吐，精度损失小 |
+| 显存极度受限 | W4 [GPTQ](https://arxiv.org/abs/2210.17323) + KV4 | 最大化 batch size |
+| 边缘设备/CPU | [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) Q4_K_M | [llama.cpp](https://github.com/ggerganov/llama.cpp) 生态完善 |
+| 研究/极限压缩 | [QuIP#](https://arxiv.org/abs/2402.04396) 2-bit | 最低 bit rate |
 
 ### 8.3 硬件兼容性
 
 | 方法 | NVIDIA Ampere (A100) | NVIDIA Hopper (H100) | NVIDIA Ada (4090) | Apple Silicon | CPU (AVX) |
 |------|---------------------|---------------------|-------------------|---------------|-----------|
-| FP8 | ✗ | ✓ | ✓ | ✗ | ✗ |
+| [FP8](https://arxiv.org/abs/2209.05433) | ✗ | ✓ | ✓ | ✗ | ✗ |
 | INT8 GEMM | ✓ | ✓ | ✓ | ✗ | ✓ (VNNI) |
 | W4A16 (Marlin) | ✓ | ✓ | ✓ | ✗ | ✗ |
-| GGUF (llama.cpp) | ✓ | ✓ | ✓ | ✓ (Metal) | ✓ |
+| [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) ([llama.cpp](https://github.com/ggerganov/llama.cpp)) | ✓ | ✓ | ✓ | ✓ (Metal) | ✓ |
 | bitsandbytes NF4 | ✓ | ✓ | ✓ | ✗ | ✗ |

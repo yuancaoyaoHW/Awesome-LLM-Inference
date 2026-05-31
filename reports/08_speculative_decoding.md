@@ -1,8 +1,8 @@
-# Speculative Decoding 全面分析
+# [Speculative Decoding](https://arxiv.org/abs/2211.17192) 全面分析
 
 ## 总览
 
-Speculative Decoding 是 LLM 推理加速的核心方法之一，通过"先猜测后验证"的方式将 autoregressive decoding 的串行瓶颈转化为并行验证，在不损失输出质量的前提下实现加速。
+[Speculative Decoding](https://arxiv.org/abs/2211.17192) 是 LLM 推理加速的核心方法之一，通过"先猜测后验证"的方式将 autoregressive decoding 的串行瓶颈转化为并行验证，在不损失输出质量的前提下实现加速。
 
 ---
 
@@ -52,7 +52,7 @@ $$\text{Speedup} \approx \frac{1 - \alpha^{\gamma+1}}{(1-\alpha)(1 + c \cdot \ga
 |------|------|----------|
 | Token-level | 逐 token 验证，rejection sampling | 标准 speculative decoding |
 | Sequence-level | 生成多个完整序列，选最优 | Best-of-N with speculation |
-| Tree-level | 生成 token tree，并行验证多条路径 | SpecInfer, Medusa |
+| Tree-level | 生成 token tree，并行验证多条路径 | [SpecInfer](https://arxiv.org/abs/2305.09781), [Medusa](https://arxiv.org/abs/2401.10774) |
 
 ---
 
@@ -60,21 +60,21 @@ $$\text{Speedup} \approx \frac{1 - \alpha^{\gamma+1}}{(1-\alpha)(1 + c \cdot \ga
 
 ### 2.1 独立小模型
 
-**SpecInfer (2023)**
+[**SpecInfer (2023)**](https://arxiv.org/abs/2305.09781)
 - **问题定义**：如何用多个小模型协同 draft 提高接受率
 - **方法核心**：多个 SSM（Small Speculative Model）生成 token tree
 - **系统机制**：Tree-based parallel decoding + token tree verification
 - **实验指标**：在 LLaMA-7B 上 1.5-2.8x speedup
 - **工程难点**：需要训练/选择合适的 draft model，tree 管理复杂
 
-**标准 Speculative Decoding (DeepMind, 2023)**
+**标准 [Speculative Decoding](https://arxiv.org/abs/2211.17192) (DeepMind, 2023)**
 - **方法核心**：单个小模型 draft + rejection sampling 验证
 - **数学保证**：输出分布与 target model 完全一致
 - **验证公式**：accept if $u < \min(1, \frac{p(x)}{q(x)})$，其中 $p$ 是 target，$q$ 是 draft
 
 ### 2.2 Self-Draft 方法
 
-**Medusa (2024)**
+[**Medusa (2024)**](https://arxiv.org/abs/2401.10774)
 - **问题定义**：如何避免独立 draft model 的额外内存和计算开销
 - **方法核心**：在 target model 最后一层添加多个 prediction head
   - Head $i$ 预测第 $i+1$ 个 future token
@@ -89,16 +89,16 @@ $$\text{Speedup} \approx \frac{1 - \alpha^{\gamma+1}}{(1-\alpha)(1 + c \cdot \ga
   - Tree attention 的 KV cache 管理
   - 对 vLLM/SGLang 的集成需要修改 attention mask
 
-**EAGLE (2024)**
-- **问题定义**：Medusa 的 head 独立预测，缺乏 token 间依赖
+[**EAGLE (2024)**](https://arxiv.org/abs/2401.15077)
+- **问题定义**：[Medusa](https://arxiv.org/abs/2401.10774) 的 head 独立预测，缺乏 token 间依赖
 - **方法核心**：
   - 用 autoregressive draft head（单层 Transformer）
   - 输入：前一个 token 的 embedding + target model 的 feature
   - 保持 token 间的依赖关系
-- **实验指标**：2.5-3.8x speedup，优于 Medusa
+- **实验指标**：2.5-3.8x speedup，优于 [Medusa](https://arxiv.org/abs/2401.10774)
 - **工程难点**：draft head 的训练数据生成
 
-**EAGLE-2 (2024)**
+[**EAGLE-2 (2024)**](https://arxiv.org/abs/2406.16858)
 - **改进**：Dynamic draft tree construction
   - 根据 confidence score 动态调整 tree 结构
   - 高 confidence 路径分配更多 budget
@@ -106,31 +106,31 @@ $$\text{Speedup} \approx \frac{1 - \alpha^{\gamma+1}}{(1-\alpha)(1 + c \cdot \ga
 
 ### 2.3 Retrieval-based
 
-**REST (2024)**
+[**REST (2024)**](https://arxiv.org/abs/2311.08252)
 - **方法核心**：从 datastore 中检索 n-gram 作为 draft
 - **优点**：无需训练 draft model
 - **缺点**：依赖 datastore 质量，domain-specific
 
-### 2.4 Lookahead Decoding
+### 2.4 [Lookahead Decoding](https://arxiv.org/abs/2402.02057)
 
-**Lookahead Decoding (2024)**
+[**Lookahead Decoding (2024)**](https://arxiv.org/abs/2402.02057)
 - **方法核心**：利用 Jacobi iteration 并行生成多个 token
   - 维护 n-gram pool
   - 每步同时 verify 已有 n-gram 和生成新 n-gram
 - **优点**：无需额外模型或训练
 - **缺点**：加速比有限（~1.5-2x）
 
-### 2.5 Mamba Drafters (2025)
+### 2.5 [Mamba Drafters (2025)](https://arxiv.org/abs/2506.01206)
 
-- **方法核心**：用 Mamba（SSM）模型作为 draft model
-  - Mamba 的线性复杂度使 draft 更快
+- **方法核心**：用 [Mamba](https://arxiv.org/abs/2312.00752)（SSM）模型作为 draft model
+  - [Mamba](https://arxiv.org/abs/2312.00752) 的线性复杂度使 draft 更快
   - 特别适合长序列场景
 - **优点**：draft 速度快，长序列友好
-- **缺点**：需要训练 Mamba draft model
+- **缺点**：需要训练 [Mamba](https://arxiv.org/abs/2312.00752) draft model
 
-### 2.6 MineDraft (2026)
+### 2.6 [MineDraft (2026)](https://arxiv.org/abs/2603.18016)
 
-- **方法核心**：Batch Parallel Speculative Decoding
+- **方法核心**：Batch Parallel [Speculative Decoding](https://arxiv.org/abs/2211.17192)
   - 在 batch 维度并行化 speculation
   - 不同请求可以有不同的 draft length
 - **优点**：适合高吞吐 serving 场景
@@ -178,10 +178,10 @@ BA [ 0  1  0  0  1 ]
 
 | 方法 | Tree 构建 | Tree 大小 | 动态调整 |
 |------|-----------|-----------|----------|
-| SpecInfer | 多 SSM 生成 | 固定 | 否 |
-| Medusa | Top-k per head | 固定 (64 nodes) | 否 |
-| EAGLE-2 | Confidence-based | 动态 | 是 |
-| MineDraft | Batch-aware | 动态 | 是 |
+| [SpecInfer](https://arxiv.org/abs/2305.09781) | 多 SSM 生成 | 固定 | 否 |
+| [Medusa](https://arxiv.org/abs/2401.10774) | Top-k per head | 固定 (64 nodes) | 否 |
+| [EAGLE-2](https://arxiv.org/abs/2406.16858) | Confidence-based | 动态 | 是 |
+| [MineDraft](https://arxiv.org/abs/2603.18016) | Batch-aware | 动态 | 是 |
 
 ---
 
@@ -196,15 +196,15 @@ BA [ 0  1  0  0  1 ]
 
 **保证**：输出分布与 target model 完全一致
 
-### 4.2 Typical Acceptance (Medusa)
+### 4.2 Typical Acceptance ([Medusa](https://arxiv.org/abs/2401.10774))
 
 - 放宽验证条件：只要 token 在 target model 的 typical set 中就接受
 - 允许轻微的分布偏差
 - 换取更高的接受率
 
-### 4.3 Speculative Rejection (Fast Best-of-N)
+### 4.3 Speculative Rejection ([Fast Best-of-N](https://arxiv.org/abs/2410.20290))
 
-**论文**：Fast Best-of-N Decoding via Speculative Rejection (CMU, 2024)
+**论文**：[Fast Best-of-N](https://arxiv.org/abs/2410.20290) Decoding via Speculative Rejection (CMU, 2024)
 
 - **问题**：Best-of-N 需要生成 N 个完整序列再选最优
 - **方法**：用 speculation 提前拒绝低质量序列
@@ -214,12 +214,12 @@ BA [ 0  1  0  0  1 ]
 
 ## 5. 系统集成
 
-### 5.1 vLLM Speculative Decoding
+### 5.1 [vLLM](https://github.com/vllm-project/vllm) [Speculative Decoding](https://arxiv.org/abs/2211.17192)
 
 **支持的方法**：
 - Draft model（独立小模型）
-- Medusa heads
-- EAGLE
+- [Medusa](https://arxiv.org/abs/2401.10774) heads
+- [EAGLE](https://arxiv.org/abs/2401.15077)
 - ngram-based（无模型）
 
 **工程挑战**：
@@ -227,18 +227,18 @@ BA [ 0  1  0  0  1 ]
 - Tree attention 的 KV cache block 管理
 - Speculation 失败时的 rollback
 
-### 5.2 SGLang Speculative Decoding
+### 5.2 [SGLang](https://github.com/sgl-project/sglang) [Speculative Decoding](https://arxiv.org/abs/2211.17192)
 
 **特点**：
-- 与 RadixAttention 集成
+- 与 [RadixAttention](https://arxiv.org/abs/2312.07104) 集成
 - Draft model 的 KV cache 也可以 prefix share
-- EAGLE 集成
+- [EAGLE](https://arxiv.org/abs/2401.15077) 集成
 
-### 5.3 TensorRT-LLM
+### 5.3 [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM)
 
 **特点**：
 - Draft model 支持
-- FP8 draft model
+- [FP8](https://arxiv.org/abs/2209.05433) draft model
 - 硬件级优化的 tree attention
 
 ### 5.4 工程挑战总结
@@ -248,7 +248,7 @@ BA [ 0  1  0  0  1 ]
 | KV Cache 管理 | Tree nodes 的 KV cache 分配/回收 | Paged allocation + rollback |
 | Batch 异构 | 不同请求 draft length 不同 | Padding 或 variable-length batch |
 | Draft model 选择 | 如何选择最优 draft model | 离线评估 acceptance rate |
-| 长序列 | 长 context 下 draft 质量下降 | MagicDec: speculation on KV subset |
+| 长序列 | 长 context 下 draft 质量下降 | [MagicDec](https://arxiv.org/abs/2408.11049): speculation on KV subset |
 | Serving 集成 | 与 continuous batching 的交互 | 每个 iteration 决定是否 speculate |
 
 ---
@@ -279,11 +279,11 @@ graph TD
 | 方法 | Speedup (7B) | Speedup (70B) | 额外内存 | 需要训练 |
 |------|-------------|---------------|----------|----------|
 | Draft model (68M) | 1.8-2.5x | 2.0-3.0x | +68M params | 否（用现有模型） |
-| Medusa | 2.2-3.6x | 2.5-3.8x | +少量 head | 是 |
-| EAGLE | 2.5-3.8x | 3.0-4.0x | +1 layer | 是 |
-| EAGLE-2 | 3.0-4.2x | 3.5-4.5x | +1 layer | 是 |
+| [Medusa](https://arxiv.org/abs/2401.10774) | 2.2-3.6x | 2.5-3.8x | +少量 head | 是 |
+| [EAGLE](https://arxiv.org/abs/2401.15077) | 2.5-3.8x | 3.0-4.0x | +1 layer | 是 |
+| [EAGLE-2](https://arxiv.org/abs/2406.16858) | 3.0-4.2x | 3.5-4.5x | +1 layer | 是 |
 | Lookahead | 1.5-2.0x | 1.8-2.5x | 无 | 否 |
-| REST | 1.5-2.5x | 2.0-3.0x | +datastore | 否 |
+| [REST](https://arxiv.org/abs/2311.08252) | 1.5-2.5x | 2.0-3.0x | +datastore | 否 |
 
 ### 6.3 Batch Size 效应
 
@@ -297,7 +297,7 @@ graph TD
 
 | 系统 | 集成状态 | 推荐方法 |
 |------|----------|----------|
-| vLLM | 完整支持 | EAGLE（高加速比） |
-| SGLang | 完整支持 | EAGLE + RadixAttention |
-| TensorRT-LLM | 支持 draft model | Draft model（稳定） |
-| llama.cpp | 基础支持 | Draft model（简单） |
+| [vLLM](https://github.com/vllm-project/vllm) | 完整支持 | [EAGLE](https://arxiv.org/abs/2401.15077)（高加速比） |
+| [SGLang](https://github.com/sgl-project/sglang) | 完整支持 | [EAGLE](https://arxiv.org/abs/2401.15077) + [RadixAttention](https://arxiv.org/abs/2312.07104) |
+| [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) | 支持 draft model | Draft model（稳定） |
+| [llama.cpp](https://github.com/ggerganov/llama.cpp) | 基础支持 | Draft model（简单） |

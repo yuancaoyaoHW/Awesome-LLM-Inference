@@ -2,7 +2,7 @@
 
 ## 总览
 
-本文档定义 LLM Inference 的标准化 benchmark 框架，覆盖关键指标、测试工具、对比维度和各系统的性能数据。
+本文档定义 [LLM Inference](https://arxiv.org/abs/2410.04466) 的标准化 benchmark 框架，覆盖关键指标、测试工具、对比维度和各系统的性能数据。
 
 ---
 
@@ -48,7 +48,7 @@
 
 ## 2. Benchmark 工具
 
-### 2.1 vLLM Benchmark Suite
+### 2.1 [vLLM](https://github.com/vllm-project/vllm) Benchmark Suite
 
 ```bash
 # Throughput benchmark
@@ -68,7 +68,7 @@ python benchmarks/benchmark_serving.py \
     --request-rate 10 --dataset sharegpt
 ```
 
-### 2.2 SGLang Benchmark
+### 2.2 [SGLang](https://github.com/sgl-project/sglang) Benchmark
 
 ```bash
 # Offline throughput
@@ -86,7 +86,7 @@ python -m sglang.bench_serving \
 |--------|------|------|
 | ShareGPT | 真实对话，长度分布不均 | Online serving |
 | LMSYS-Chat-1M | 大规模真实请求 | 负载模拟 |
-| Alpaca | 短指令 | 低延迟场景 |
+| [Alpa](https://arxiv.org/abs/2201.12023)ca | 短指令 | 低延迟场景 |
 | LongBench | 长文本 | Long context |
 | Synthetic | 固定长度 | 控制变量实验 |
 
@@ -100,13 +100,13 @@ python -m sglang.bench_serving \
 |------|--------|------|--------|-------|----------|----------|
 | Llama-2-7B | 7B | 32 | 4096 | 32 | 32 | 1×A100-40G |
 | Llama-2-13B | 13B | 40 | 5120 | 40 | 40 | 1×A100-80G |
-| Llama-2-70B | 70B | 80 | 8192 | 64 | 8 (GQA) | 4×A100-80G |
-| Mixtral-8x7B | 47B | 32 | 4096 | 32 | 8 | 2×A100-80G |
-| DeepSeek-V2 | 236B | 60 | 5120 | 128 | MLA | 8×A100-80G |
+| Llama-2-70B | 70B | 80 | 8192 | 64 | 8 ([GQA](https://arxiv.org/abs/2305.13245)) | 4×A100-80G |
+| [Mixtral](https://arxiv.org/abs/2401.04088)-8x7B | 47B | 32 | 4096 | 32 | 8 | 2×A100-80G |
+| [DeepSeek-V2](https://arxiv.org/abs/2405.04434) | 236B | 60 | 5120 | 128 | MLA | 8×A100-80G |
 
 ### 3.2 硬件维度
 
-| GPU | HBM | 带宽 | FP16 TFLOPS | FP8 TFLOPS | 互联 | 价格/hr |
+| GPU | HBM | 带宽 | FP16 TFLOPS | [FP8](https://arxiv.org/abs/2209.05433) TFLOPS | 互联 | 价格/hr |
 |-----|-----|------|-------------|------------|------|---------|
 | A100-80G | 80GB | 2.0 TB/s | 312 | - | NVLink 600GB/s | ~$2.5 |
 | H100-80G | 80GB | 3.35 TB/s | 990 | 1979 | NVLink 900GB/s | ~$4.0 |
@@ -140,11 +140,11 @@ python -m sglang.bench_serving \
 
 | 系统 | Throughput (req/s) | Throughput (tokens/s) | 数据来源 |
 |------|-------------------|----------------------|----------|
-| vLLM | ~25 | ~5000 | vLLM paper |
-| SGLang | ~28 | ~5500 | SGLang paper |
-| TensorRT-LLM | ~30 | ~6000 | NVIDIA blog |
-| TGI | ~15 | ~3000 | Community benchmark |
-| LightLLM | ~22 | ~4500 | LightLLM repo |
+| [vLLM](https://github.com/vllm-project/vllm) | ~25 | ~5000 | [vLLM](https://github.com/vllm-project/vllm) paper |
+| [SGLang](https://github.com/sgl-project/sglang) | ~28 | ~5500 | [SGLang](https://github.com/sgl-project/sglang) paper |
+| [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) | ~30 | ~6000 | NVIDIA blog |
+| [TGI](https://github.com/huggingface/text-generation-inference) | ~15 | ~3000 | Community benchmark |
+| [LightLLM](https://github.com/ModelTC/lightllm) | ~22 | ~4500 | [LightLLM](https://github.com/ModelTC/lightllm) repo |
 
 *注：数据来自各论文/博客，测试条件可能不完全一致*
 
@@ -152,29 +152,29 @@ python -m sglang.bench_serving \
 
 | 系统 | TTFT P50 (ms) | TTFT P99 (ms) | TPOT P50 (ms) | TPOT P99 (ms) |
 |------|---------------|---------------|---------------|---------------|
-| vLLM | ~30 | ~80 | ~15 | ~25 |
-| SGLang | ~28 | ~70 | ~14 | ~22 |
-| TensorRT-LLM | ~25 | ~60 | ~12 | ~20 |
+| [vLLM](https://github.com/vllm-project/vllm) | ~30 | ~80 | ~15 | ~25 |
+| [SGLang](https://github.com/sgl-project/sglang) | ~28 | ~70 | ~14 | ~22 |
+| [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) | ~25 | ~60 | ~12 | ~20 |
 
-### 4.3 Speculative Decoding Speedup
+### 4.3 [Speculative Decoding](https://arxiv.org/abs/2211.17192) Speedup
 
 | 方法 | 模型 | Speedup | 条件 |
 |------|------|---------|------|
 | Standard SD | Llama-2-70B | 1.8-2.5x | draft=7B, γ=5 |
-| Medusa | Vicuna-7B | 2.2-3.6x | 2 heads |
-| EAGLE | Vicuna-7B | 2.5-3.8x | - |
-| EAGLE-2 | Vicuna-7B | 3.0-4.2x | dynamic tree |
+| [Medusa](https://arxiv.org/abs/2401.10774) | Vicuna-7B | 2.2-3.6x | 2 heads |
+| [EAGLE](https://arxiv.org/abs/2401.15077) | Vicuna-7B | 2.5-3.8x | - |
+| [EAGLE-2](https://arxiv.org/abs/2406.16858) | Vicuna-7B | 3.0-4.2x | dynamic tree |
 | Lookahead | Llama-2-7B | 1.5-2.0x | - |
 
 ### 4.4 Quantization 性能影响
 
 | 方法 | 精度损失 (PPL↑) | Speedup | Memory 节省 |
 |------|-----------------|---------|-------------|
-| FP8 (W8A8) | <0.1 | 1.5-2.0x | 50% |
-| GPTQ (W4A16) | 0.1-0.5 | 1.2-1.5x | 75% |
-| AWQ (W4A16) | 0.1-0.3 | 1.2-1.5x | 75% |
-| SmoothQuant (W8A8) | <0.1 | 1.3-1.5x | 50% |
-| QServe (W4A8KV4) | 0.2-0.5 | 2.0-3.0x | 80% |
+| [FP8](https://arxiv.org/abs/2209.05433) (W8A8) | <0.1 | 1.5-2.0x | 50% |
+| [GPTQ](https://arxiv.org/abs/2210.17323) (W4A16) | 0.1-0.5 | 1.2-1.5x | 75% |
+| [AWQ](https://arxiv.org/abs/2306.00978) (W4A16) | 0.1-0.3 | 1.2-1.5x | 75% |
+| [SmoothQuant](https://arxiv.org/abs/2211.10438) (W8A8) | <0.1 | 1.3-1.5x | 50% |
+| [QServe](https://arxiv.org/abs/2405.04532) ([W4A8KV4](https://arxiv.org/abs/2405.04532)) | 0.2-0.5 | 2.0-3.0x | 80% |
 
 ---
 
@@ -297,8 +297,8 @@ $$\text{Cost per 1M tokens} = \frac{GPU\_price\_per\_hour \times N_{GPUs}}{throu
 
 | 优化方法 | 实现成本 | Speedup | Cost 降低 | ROI |
 |----------|----------|---------|-----------|-----|
-| FP8 Quantization | 低 | 1.5-2x | 33-50% | 高 |
-| Speculative Decoding | 中 | 2-3x | 50-67% | 中 |
+| [FP8](https://arxiv.org/abs/2209.05433) Quantization | 低 | 1.5-2x | 33-50% | 高 |
+| [Speculative Decoding](https://arxiv.org/abs/2211.17192) | 中 | 2-3x | 50-67% | 中 |
 | P/D Disaggregation | 高 | 1.5-2x | 33-50% | 低 |
 | Prefix Caching | 低 | 1.2-2x (场景依赖) | 17-50% | 高 |
 | KV Compression | 中 | 1.2-1.5x | 17-33% | 中 |

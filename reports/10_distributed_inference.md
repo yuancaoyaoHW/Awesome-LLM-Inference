@@ -2,13 +2,13 @@
 
 ## 总览
 
-随着模型规模增长（70B → 405B → MoE），单 GPU 无法容纳完整模型，分布式推理成为必需。本文档分析各种并行策略、多节点 serving 架构和通信优化。
+随着模型规模增长（70B → 405B → [MoE](https://arxiv.org/abs/2407.06204)），单 GPU 无法容纳完整模型，分布式推理成为必需。本文档分析各种并行策略、多节点 serving 架构和通信优化。
 
 ---
 
 ## 1. 并行策略
 
-### 1.1 Tensor Parallelism (TP)
+### 1.1 [Tensor Parallel](https://arxiv.org/abs/2402.04925)ism (TP)
 
 **定义**：将单层的权重矩阵沿某个维度切分到多个 GPU，每个 GPU 计算部分结果后通过 AllReduce 聚合。
 
@@ -70,7 +70,7 @@ $$\text{Bubble} = \frac{(p-1) \times t_{micro}}{(m + p - 1) \times t_{micro}} = 
 
 **定义**：将长序列切分到多个 GPU 并行处理 attention。
 
-**Ring Attention**：
+[**Ring Attention**](https://arxiv.org/abs/2310.01889)：
 - 将 KV 分块，在 GPU 间以 ring 方式传递
 - 每个 GPU 计算 local Q × remote K/V
 - 通信与计算 overlap
@@ -87,14 +87,14 @@ graph TD
 
 **通信量**：每个 GPU 发送 $2 \times seq\_len/P \times d \times dtype\_bytes$（K 和 V）
 
-**Ulysses (DeepSpeed)**：
+**Ulysses ([DeepSpeed](https://github.com/microsoft/DeepSpeed))**：
 - 将 Q/K/V 沿 head 维度切分
 - AlltoAll 通信重新分布
 - 每个 GPU 计算完整 attention 的一部分 head
 
 **Ring vs Ulysses**：
 
-| 维度 | Ring Attention | Ulysses |
+| 维度 | [Ring Attention](https://arxiv.org/abs/2310.01889) | Ulysses |
 |------|---------------|---------|
 | 通信模式 | P2P ring | AlltoAll |
 | 通信量 | O(seq_len × d / P) | O(seq_len × d / P) |
@@ -111,7 +111,7 @@ graph TD
 
 ### 1.4 Expert Parallelism (EP)
 
-**定义**：MoE 模型中，将不同 expert 分配到不同 GPU。
+**定义**：[MoE](https://arxiv.org/abs/2407.06204) 模型中，将不同 expert 分配到不同 GPU。
 
 **通信模式**：
 - AlltoAll：将 token 路由到对应 expert 所在的 GPU
@@ -129,7 +129,7 @@ graph TD
 **与 SP 的区别**：CP 通常指 prefill 阶段的并行，SP 更通用。
 
 **Cache-DiT 实现**：
-- Ring Attention with batched P2P
+- [Ring Attention](https://arxiv.org/abs/2310.01889) with batched P2P
 - USP (Hybrid Ring + Ulysses)
 - 2D/3D Hybrid Parallelism (USP + TP)
 
@@ -137,7 +137,7 @@ graph TD
 
 ## 2. Multi-Node Serving
 
-### 2.1 LoongServe
+### 2.1 [LoongServe](https://arxiv.org/abs/2404.09526)
 
 **论文**：LoongServe: Efficiently Serving Long-Context Large Language Models with Elastic Sequence Parallelism
 
@@ -153,7 +153,7 @@ graph TD
 - 相比 static SP，吞吐提升 1.5-2x
 - P99 latency 降低
 
-### 2.2 HexGen
+### 2.2 [HexGen](https://arxiv.org/abs/2311.11514)
 
 **问题定义**：如何在异构 GPU 集群上高效 serving？
 
@@ -162,7 +162,7 @@ graph TD
 - 根据 GPU 计算能力和互联带宽分配层
 - 支持混合 A100 + A10G 等配置
 
-### 2.3 Mooncake
+### 2.3 [Mooncake](https://arxiv.org/abs/2407.00079)
 
 **问题定义**：如何构建以 KV Cache 为中心的分布式 serving 架构？
 
@@ -198,15 +198,15 @@ graph TD
     end
 ```
 
-### 2.4 DistServe
+### 2.4 [DistServe](https://arxiv.org/abs/2401.09670)
 
 （详见 06_serving_scheduling.md 第 3 节）
 
 ---
 
-## 3. MoE Inference
+## 3. [MoE Inference](https://arxiv.org/abs/2404.02852)
 
-### 3.1 MoE 基础
+### 3.1 [MoE](https://arxiv.org/abs/2407.06204) 基础
 
 **结构**：每层有 N 个 expert（FFN），router 选择 top-k expert 处理每个 token。
 
@@ -234,18 +234,18 @@ graph TD
 **Expert Offloading**：
 - 将不活跃 expert 卸载到 CPU
 - 预测下一步需要的 expert 并预取
-- Mixtral Offloading：在消费级 GPU 上运行 MoE
+- [Mixtral Offloading](https://arxiv.org/abs/2312.17238)：在消费级 GPU 上运行 MoE
 
 **Expert Quantization**：
 - 对不同 expert 使用不同量化精度
 - 热门 expert 保持高精度
 
-### 3.4 DeepSeek-V3 推理优化
+### 3.4 [DeepSeek-V3](https://arxiv.org/abs/2412.19437) 推理优化
 
 - 256 expert 分布在多节点
 - Shared expert 在所有 GPU 上复制
 - 优化的 AlltoAll kernel
-- FP8 量化减少通信量
+- [FP8](https://arxiv.org/abs/2209.05433) 量化减少通信量
 
 ---
 
@@ -258,9 +258,9 @@ graph TD
 **实现方式**：
 - CUDA Stream：计算和通信在不同 stream
 - Kernel-level overlap：在 kernel 内部交替计算和通信
-- TileLink (Triton-distributed)：tile 级别的 overlap
+- TileLink ([Triton-distributed](https://arxiv.org/abs/2503.20313))：tile 级别的 overlap
 
-### 4.2 Triton-distributed / TileLink
+### 4.2 [Triton-distributed](https://arxiv.org/abs/2503.20313) / TileLink
 
 **论文**：TileLink: Generating Efficient Compute-Communication Overlapping Kernels (ByteDance-Seed, 2025)
 
@@ -298,7 +298,7 @@ $$V_{TP} = 2 \times \frac{N-1}{N} \times H \times B \times S \times dtype$$
 **PP inter-stage**：
 $$V_{PP} = H \times B \times S \times dtype$$
 
-**SP Ring Attention per step**：
+**SP [Ring Attention](https://arxiv.org/abs/2310.01889) per step**：
 $$V_{SP} = 2 \times \frac{S}{P} \times d_{head} \times n_{kv\_heads} \times dtype$$
 
 ### 5.2 Scaling Efficiency
@@ -319,12 +319,12 @@ $$\text{Efficiency}_{PP} = \frac{m}{m + p - 1}$$
 | 模型大小 | 硬件 | 推荐策略 |
 |----------|------|----------|
 | 7B | 1×A100 | 无并行 |
-| 13B | 1×A100 | 无并行（FP8）或 TP=2 |
+| 13B | 1×A100 | 无并行（[FP8](https://arxiv.org/abs/2209.05433)）或 TP=2 |
 | 70B | 8×A100 | TP=8 |
 | 70B | 2×8×A100 | TP=8, PP=2 |
 | 405B | 8×8×H100 | TP=8, PP=8 |
-| MoE-8x22B | 8×A100 | EP=8 或 TP=4,EP=2 |
-| DeepSeek-V3 | 多节点 | TP=8, EP=32+ |
+| [MoE](https://arxiv.org/abs/2407.06204)-8x22B | 8×A100 | EP=8 或 TP=4,EP=2 |
+| [DeepSeek-V3](https://arxiv.org/abs/2412.19437) | 多节点 | TP=8, EP=32+ |
 
 ---
 
@@ -358,7 +358,7 @@ graph TD
 | 系统 | 难点 | 原因 |
 |------|------|------|
 | LoongServe | KV Cache 迁移 | 动态 SP 变化时需要重新分布 KV |
-| Mooncake | 分布式 KV Pool | 需要高性能 KV 存储系统 |
-| DeepSeek-V3 | 256 expert routing | AlltoAll 通信优化需要定制 |
-| Ring Attention | Overlap 实现 | 需要精确的 CUDA stream 管理 |
+| [Mooncake](https://arxiv.org/abs/2407.00079) | 分布式 KV Pool | 需要高性能 KV 存储系统 |
+| [DeepSeek-V3](https://arxiv.org/abs/2412.19437) | 256 expert routing | AlltoAll 通信优化需要定制 |
+| [Ring Attention](https://arxiv.org/abs/2310.01889) | Overlap 实现 | 需要精确的 CUDA stream 管理 |
 | TileLink | Triton 扩展 | 需要修改 Triton compiler |
