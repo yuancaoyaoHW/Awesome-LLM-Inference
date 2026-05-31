@@ -556,7 +556,7 @@ graph TD
 - [**FlatQuant**](https://arxiv.org/abs/2410.09426) (ICML 2025): 通过Kronecker结构仿射变换平滑outlier，W4A4KV4 SOTA，LLaMA-3-70B精度损失<1%，prefill加速2.3x
 - [**Quartet**](https://arxiv.org/abs/2505.14669) (NeurIPS 2025): 原生FP4训练框架，揭示低精度scaling law，Blackwell架构上FP4训练与FP16精度相当
 - [**FP4 All the Way**](https://arxiv.org/abs/2505.19115) (NeurIPS 2025, Intel): 首次实现全FP4训练(weight+activation+gradient)，7B模型在256 Gaudi2上训练，精度接近BF16
-- [**LittleBit**](https://arxiv.org/abs/2503.05449) (NeurIPS 2025): 超低比特量化框架(0.1 BPW)，低秩latent分解+二值化，Llama2-13B压缩至<0.9GB
-- [**OstQuant**](https://arxiv.org/abs/2504.13253) (ICLR 2025): 正交和缩放变换优化量化分布拟合，改进W4A4精度
-- [**RDKV**](https://arxiv.org/abs/2505.08317) (2025): 率失真比特分配统一eviction和quantization，从{0,2,4,8,16}bit中为每个KV单元选择最优bit-width
-- [**ICQuant**](https://arxiv.org/abs/2501.09878) (2025): Index Coding实现低比特LLM量化，利用编码理论优化codebook设计
+- [**LittleBit**](https://arxiv.org/abs/2506.13771) (NeurIPS 2025): 超低比特量化框架(0.1 BPW)，低秩latent分解+二值化，Llama2-13B压缩至<0.9GB
+- [**OstQuant**](https://arxiv.org/abs/2501.13987) (ICLR 2025): 正交和缩放变换优化量化分布拟合，改进W4A4精度
+- [**RDKV**](https://arxiv.org/abs/2605.08317) (2026): 率失真比特分配统一eviction和quantization，从{0,2,4,8,16}bit中为每个KV单元选择最优bit-width
+- [**ICQuant**](https://arxiv.org/abs/2505.00850) (2025): Index Coding实现低比特LLM量化，利用编码理论优化codebook设计

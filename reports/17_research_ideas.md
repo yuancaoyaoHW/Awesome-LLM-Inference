@@ -528,7 +528,7 @@
 - [**EAGLE-3.1**](https://github.com/SafeAILab/EAGLE) (SafeAI Lab, 2026): 修复EAGLE-3的attention drift问题，FC normalization + post-norm设计，长上下文鲁棒性显著提升
 - [**Speculative Speculative Decoding (Saguaro)**](https://arxiv.org/abs/2603.03251) (2026): 二级speculation架构，比现有最优speculative decoding快2x，验证了多级speculation的可行性
 - [**Learning To Draft**](https://arxiv.org/abs/2603.01639) (2026): 强化学习自适应draft深度和tree大小，验证了选题16(Batch-Aware Speculative Decoding)的研究方向
-- [**RDKV**](https://arxiv.org/abs/2505.08317) (2025): 率失真优化统一eviction和quantization，验证了选题15(Token-Aware自适应精度)的研究方向
+- [**RDKV**](https://arxiv.org/abs/2605.08317) (2026): 率失真优化统一eviction和quantization，验证了选题15(Token-Aware自适应精度)的研究方向
 - [**PPD Disaggregation**](https://arxiv.org/abs/2603.13358) (2026): 多轮对话的三级disaggregation，验证了选题23(动态负载均衡)和选题30(KV Cache迁移)的研究方向
-- [**LittleBit**](https://arxiv.org/abs/2503.05449) (NeurIPS 2025): 0.1 BPW超低比特量化，低秩latent分解+二值化，验证了选题13(W4A4可行性)的极限探索方向
-- [**DuetServe**](https://arxiv.org/abs/2502.09059) (2025): 自适应intra-GPU P/D协调，为选题23(动态负载均衡)提供了新的设计空间
+- [**LittleBit**](https://arxiv.org/abs/2506.13771) (NeurIPS 2025): 0.1 BPW超低比特量化，低秩latent分解+二值化，验证了选题13(W4A4可行性)的极限探索方向
+- [**DuetServe**](https://arxiv.org/abs/2511.04791) (2025): 自适应intra-GPU P/D协调，为选题23(动态负载均衡)提供了新的设计空间

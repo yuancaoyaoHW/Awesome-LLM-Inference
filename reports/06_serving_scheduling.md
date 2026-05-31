@@ -336,4 +336,4 @@ graph TB
 - [**PPD Disaggregation**](https://arxiv.org/abs/2603.13358) (2026): 区分full-prefill和append-prefill，多轮对话场景下减少KV传输带宽消耗一个数量级
 - [**Fluid-Guided Online Scheduling**](https://arxiv.org/abs/2504.11320) (2025): 将LLM推理调度建模为流体近似的在线优化问题，考虑内存约束的最优调度策略
 - [**llm-d**](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025): Kubernetes原生分布式推理框架，prefix-cache-aware routing + SLO-aware autoscaling，H100上TTFT降低40%
-- [**DuetServe**](https://arxiv.org/abs/2502.09059) (2025): 自适应隔离策略，挑战"所有prefill都需要物理隔离"的假设，在同一GPU上协调prefill和decode
+- [**DuetServe**](https://arxiv.org/abs/2511.04791) (2025): 自适应隔离策略，挑战"所有prefill都需要物理隔离"的假设，在同一GPU上协调prefill和decode

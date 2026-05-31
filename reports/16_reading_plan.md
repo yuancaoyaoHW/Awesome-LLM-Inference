@@ -329,6 +329,6 @@ graph TD
 - [**EAGLE-3**](https://arxiv.org/abs/2503.01840) (Peking University, 2025): Speculative decoding新SOTA，Training-Time Test架构，已成为工业标准draft方法
 - [**FlatQuant**](https://arxiv.org/abs/2410.09426) (ICML 2025): W4A4KV4量化SOTA，Kronecker仿射变换+融合kernel，量化方向必读
 - [**KVzip**](https://arxiv.org/abs/2505.23416) (NeurIPS 2025): Query-agnostic KV cache压缩，通过上下文重建评估重要性，KV cache方向必读
-- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-a-datacenter-scale-inference-framework/) (NVIDIA, GTC 2025): 数据中心级推理框架，P/D disaggregation已成为生产标准，系统方向必读
+- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, GTC 2025): 数据中心级推理框架，P/D disaggregation已成为生产标准，系统方向必读
 - [**Quartet**](https://arxiv.org/abs/2505.14669) (NeurIPS 2025): 原生FP4训练，揭示低精度scaling law，硬件-算法协同设计方向必读
 - [**Efficient Attention Mechanisms Survey**](https://arxiv.org/abs/2507.19595) (2025): 全面综述linear/sparse/hybrid attention，适合快速了解attention优化全景

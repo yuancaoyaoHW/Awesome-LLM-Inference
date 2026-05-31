@@ -354,7 +354,7 @@ graph TD
 ## 最新进展 (2025-2026)
 
 - [**PPD Disaggregation**](https://arxiv.org/abs/2603.13358) (2026): 挑战"所有prefill都需要隔离"的假设，证明append-prefill对decode干扰比full-prefill小一个数量级
-- [**DuetServe**](https://arxiv.org/abs/2502.09059) (2025): 实验证明自适应intra-GPU协调可替代完全物理隔离，P/D disaggregation并非所有场景的最优解
+- [**DuetServe**](https://arxiv.org/abs/2511.04791) (2025): 实验证明自适应intra-GPU协调可替代完全物理隔离，P/D disaggregation并非所有场景的最优解
 - [**VECTOR**](https://arxiv.org/abs/2605.23258) (2026): 证明二元keep-or-drop KV eviction策略次优，三路分配(保留/近似/驱逐)在相同budget下精度更好
 - [**MiKV**](https://openreview.net/forum?id=CRQ8JuQDEd) (ICLR 2025): 揭示KV cache eviction的隐藏风险——安全提示泄露、幻觉和关键上下文丢失，低精度保留优于完全丢弃
 - [**CriticalKV**](https://arxiv.org/abs/2502.03805) (2025): 证明仅用attention weight判断KV重要性不充分，需结合value states的输出扰动分析
