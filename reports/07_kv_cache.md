@@ -469,3 +469,15 @@ $$
 - 因此 KV cache 压缩直接提升系统吞吐
 
 **量化收益估算：** FP16 → INT4 KV cache，理论上 batch size 可提升 4x，吞吐提升接近 4x（decode 阶段 memory-bound）。
+
+---
+
+## 最新进展 (2025-2026)
+
+- [**KVzip**](https://arxiv.org/abs/2505.23416) (NeurIPS 2025): Query-agnostic KV cache eviction，通过上下文重建量化KV重要性，3-4x压缩率且精度损失可忽略
+- [**RDKV**](https://arxiv.org/abs/2605.08317) (2025): 将KV cache压缩建模为率失真优化问题，统一eviction和quantization为单一优化，单A100支持256K上下文
+- [**CriticalKV**](https://arxiv.org/abs/2502.03805) (2025): 从输出扰动角度优化KV cache eviction，证明attention weight不足以判断重要性，需结合value states
+- [**xKV**](https://arxiv.org/abs/2503.04564) (2025): 跨层SVD实现KV cache压缩，利用层间KV的相关性进行联合低秩分解
+- [**MiKV**](https://openreview.net/forum?id=CRQ8JuQDEd) (ICLR 2025): 混合精度KV cache，对evicted KV pairs保留低精度副本而非完全丢弃，避免安全提示泄露和幻觉
+- [**VECTOR**](https://arxiv.org/abs/2605.23258) (2026): 三路分配框架（保留/近似/驱逐），基于可重建性感知的近似替代二元keep-or-drop策略
+- [**IndexMem**](https://arxiv.org/abs/2605.25475) (2026): 学习型KV cache eviction结合latent memory，针对长链式推理(CoT)场景的KV cache优化

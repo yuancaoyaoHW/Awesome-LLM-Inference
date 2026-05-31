@@ -362,3 +362,14 @@ graph TD
 | [DeepSeek-V3](https://arxiv.org/abs/2412.19437) | 256 expert routing | AlltoAll 通信优化需要定制 |
 | [Ring Attention](https://arxiv.org/abs/2310.01889) | Overlap 实现 | 需要精确的 CUDA stream 管理 |
 | TileLink | Triton 扩展 | 需要修改 Triton compiler |
+
+---
+
+## 最新进展 (2025-2026)
+
+- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-a-datacenter-scale-inference-framework/) (NVIDIA, GTC 2025): 数据中心级推理编排，原生P/D disaggregation + wide Expert Parallelism，B200上单GPU 3.1k tok/s
+- [**llm-d**](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025): Kubernetes原生分布式推理，支持disaggregated serving + prefix-cache-aware routing + MoE wide-EP，16x16 B200达50k tok/s
+- [**STAR**](https://arxiv.org/abs/2510.13668) (2025): Decode阶段重调度，解决disaggregated架构中长输出reasoning任务导致的decode实例负载不均衡
+- [**PPD Disaggregation**](https://arxiv.org/abs/2603.13358) (2026): 多轮对话场景的三级disaggregation(Prefill-Prefill-Decode)，区分full-prefill和append-prefill减少KV传输
+- [**AMPD**](https://arxiv.org/abs/2602.14516) (2026): 高效多轮LLM推理的disaggregated serving，基于实时队列状态的路由优化
+- [**DuetServe**](https://arxiv.org/abs/2502.09059) (2025): 自适应intra-GPU prefill/decode协调，挑战完全物理隔离的必要性，在同一GPU上高效混合两阶段

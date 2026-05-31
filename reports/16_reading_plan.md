@@ -321,3 +321,14 @@ graph TD
 4. Prefill 阻塞 decode → [Sarathi](https://arxiv.org/abs/2308.16369) 提出 chunked prefill → [DistServe](https://arxiv.org/abs/2401.09670) 提出 P/D 分离
 5. Paged kernel 有 overhead → [vAttention](https://arxiv.org/abs/2405.04437) 用 OS VMM 消除
 6. 单机 KV cache 不够 → [Mooncake](https://arxiv.org/abs/2407.00079) 提出分布式 KV pool
+
+---
+
+## 最新进展 (2025-2026)
+
+- [**EAGLE-3**](https://arxiv.org/abs/2503.01840) (Peking University, 2025): Speculative decoding新SOTA，Training-Time Test架构，已成为工业标准draft方法
+- [**FlatQuant**](https://arxiv.org/abs/2410.09426) (ICML 2025): W4A4KV4量化SOTA，Kronecker仿射变换+融合kernel，量化方向必读
+- [**KVzip**](https://arxiv.org/abs/2505.23416) (NeurIPS 2025): Query-agnostic KV cache压缩，通过上下文重建评估重要性，KV cache方向必读
+- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-a-datacenter-scale-inference-framework/) (NVIDIA, GTC 2025): 数据中心级推理框架，P/D disaggregation已成为生产标准，系统方向必读
+- [**Quartet**](https://arxiv.org/abs/2505.14669) (NeurIPS 2025): 原生FP4训练，揭示低精度scaling law，硬件-算法协同设计方向必读
+- [**Efficient Attention Mechanisms Survey**](https://arxiv.org/abs/2507.19595) (2025): 全面综述linear/sparse/hybrid attention，适合快速了解attention优化全景

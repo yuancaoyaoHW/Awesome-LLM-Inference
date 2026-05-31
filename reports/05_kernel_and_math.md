@@ -546,3 +546,14 @@ graph LR
     style FML fill:#69f,stroke:#333
 ```
 
+
+---
+
+## 最新进展 (2025-2026)
+
+- [**FlashAttention-4**](https://arxiv.org/abs/2603.05451) (Tri Dao et al., 2026): 针对Blackwell架构优化，支持FP4/FP8 attention，利用第五代Tensor Core和TMA异步流水线
+- [**Flash Sparse Attention**](https://arxiv.org/abs/2508.18224) (2025): 原生可训练的稀疏attention kernel，支持动态block-sparse pattern的高效GPU实现
+- [**DART**](https://arxiv.org/abs/2601.19278) (2026): 扩散模型启发的并行draft生成，单次forward预测多个future token logits，比EAGLE-3 draft快6.8x
+- [**P-EAGLE**](https://aws.amazon.com/blogs/machine-learning/p-eagle-faster-llm-inference-with-parallel-speculative-decoding-in-vllm) (AWS, 2025): 并行化EAGLE draft生成，4层轻量模型单次forward生成10个token，B200上比EAGLE-3快1.69x
+- [**Event Tensor Compiler**](https://arxiv.org/abs/2604.13327) (2026): 系统化编译器抽象支持shape dynamism和data-dependent dynamism，为LLM megakernel提供统一框架
+- [**DHSA (Dynamic Hierarchical Sparse Attention)**](https://arxiv.org/abs/2510.24606) (2025): 内存受限场景下的动态分层稀疏attention，输入自适应稀疏度降低prefill开销

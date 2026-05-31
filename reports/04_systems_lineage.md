@@ -394,3 +394,14 @@ graph TD
 | [DeepSpeed](https://github.com/microsoft/DeepSpeed)-FastGen | [DeepSpeed](https://github.com/microsoft/DeepSpeed) 训练生态集成 + SplitFuse |
 | [LightLLM](https://github.com/ModelTC/lightllm) | 轻量级 + 研究友好 + Triton kernel |
 | [Mooncake](https://arxiv.org/abs/2407.00079) | KV cache 中心的 disaggregated 架构 |
+
+---
+
+## 最新进展 (2025-2026)
+
+- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, 2025): 数据中心级推理框架，原生支持prefill/decode disaggregation、多节点EP和智能路由调度
+- [**llm-d**](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025): Kubernetes原生的分布式推理框架，支持disaggregated serving、prefix-cache-aware routing和MoE wide-EP
+- [**vLLM V1**](https://blog.vllm.ai/2025/01/27/v1-alpha-release.html) (vLLM Project/PyTorch Foundation, 2025): 架构重构，插件化模型和硬件后端，加入PyTorch Foundation治理
+- [**SGLang v0.4**](https://github.com/sgl-project/sglang) (SGLang Team, 2025): 支持确定性batch-invariant kernel、DeepSeek-R1推理优化，服务300K+ GPU
+- [**SpecForge**](https://arxiv.org/abs/2603.18567) (2026): 开源生产级speculative decoding训练框架，完整支持EAGLE-3，Qwen3-235B训练加速9.9x
+- [**PPD (Prefill-Prefill-Decode)**](https://arxiv.org/abs/2603.13358) (2026): 针对多轮对话的disaggregation优化，区分full-prefill和append-prefill，减少KV传输开销

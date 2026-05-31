@@ -308,3 +308,16 @@ H2O (2023) → Scissorhands → SnapKV → AdaKV → [DynamicKV (2024)](https://
 ```
 [Orca (2022)](https://www.usenix.org/system/files/osdi22-yu.pdf) → [vLLM (2023)](https://github.com/vllm-project/vllm) → [SGLang (2023)](https://arxiv.org/pdf/2312.07104) → [DistServe (2024)](https://arxiv.org/pdf/2401.09670) → [Mooncake (2024)](https://arxiv.org/abs/2407.20960) → [MegaScale-Infer (2025)](https://arxiv.org/pdf/2504.02263)
 ```
+
+---
+
+## 最新进展 (2025-2026)
+
+- [**EAGLE-3**](https://arxiv.org/abs/2503.01840) (Peking University, 2025): Training-Time Test架构的draft model，直接预测token而非feature，LLaMA-3.3-70B上达到4.79x加速
+- [**NSA (Native Sparse Attention)**](https://arxiv.org/abs/2502.11089) (DeepSeek, 2025): 预训练级别的稀疏注意力机制，硬件友好的block-sparse设计，集成到DeepSeek模型中
+- [**FlexPrefill**](https://arxiv.org/abs/2502.20766) (2025): 上下文感知的动态稀疏attention，实时调整attention pattern和计算预算
+- [**XAttention**](https://arxiv.org/abs/2503.16428) (2025): 基于反对角线评分的block-sparse attention框架，高效识别和剪枝非关键attention块
+- [**FlatQuant**](https://arxiv.org/abs/2410.09426) (ICML 2025): 通过仿射变换平滑outlier实现W4A4KV4量化，LLaMA-3-70B精度损失<1%，prefill加速2.3x
+- [**Quartet**](https://arxiv.org/abs/2505.14669) (NeurIPS 2025): 原生FP4训练框架，揭示低精度scaling law，Blackwell架构上实现端到端FP4训练
+- [**MoBA (Mixture of Block Attention)**](https://arxiv.org/abs/2502.13189) (2025): 将MoE思想应用于attention block选择，路由式block稀疏注意力
+- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, 2025): 数据中心级推理框架，原生支持P/D disaggregation和多节点调度

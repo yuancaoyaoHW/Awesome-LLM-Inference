@@ -302,3 +302,13 @@ $$\text{Cost per 1M tokens} = \frac{GPU\_price\_per\_hour \times N_{GPUs}}{throu
 | P/D Disaggregation | 高 | 1.5-2x | 33-50% | 低 |
 | Prefix Caching | 低 | 1.2-2x (场景依赖) | 17-50% | 高 |
 | KV Compression | 中 | 1.2-1.5x | 17-33% | 中 |
+
+---
+
+## 最新进展 (2025-2026)
+
+- [**Prism Benchmark**](https://github.com/llm-d/llm-d) (llm-d, 2025): 可复现的分布式推理benchmark工作流，覆盖disaggregated serving、wide-EP等生产场景
+- [**GPT-OSS-120B Benchmark**](https://www.clarifai.com/blog/comparing-sglang-vllm-and-tensorrt-llm-with-gpt-oss-120b) (Clarifai, 2025): vLLM vs SGLang vs TensorRT-LLM在H100上的标准化对比，100并发下vLLM达4741 tok/s
+- [**Fingerprinting Inference Systems**](https://arxiv.org/abs/2605.29979) (2026): 通过数值偏差指纹识别推理引擎/attention后端/GPU类型，揭示系统组件的可区分性
+- [**vLLM Thesis**](https://www2.eecs.berkeley.edu/Pubs/TechRpts/2025/Archive/EECS-2025-192.pdf) (UC Berkeley, 2025): Woosuk Kwon博士论文，系统化总结vLLM设计哲学和PagedAttention的完整技术栈
+- [**LLM Inference Optimization Survey**](https://arxiv.org/abs/2507.19595) (2025): 高效attention机制综述，系统分类linear/sparse/hybrid attention方法及其性能对比

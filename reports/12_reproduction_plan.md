@@ -169,3 +169,13 @@ graph TD
 ```
 
 **总预计时间**：完整路线约 3-4 个月（全职）
+
+---
+
+## 最新进展 (2025-2026)
+
+- [**SpecForge**](https://arxiv.org/abs/2603.18567) (2026): 开源EAGLE-3训练框架，target-draft解耦+混合并行+优化kernel，可直接复现speculative decoding训练流程
+- [**TorchSpec**](https://github.com/SafeAILab/EAGLE) (2026): EAGLE-3.1官方训练基础设施，降低speculative decoding研究的训练门槛
+- [**llm-d**](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025): 开源Kubernetes原生推理框架，提供可复现的disaggregated serving benchmark工作流
+- [**FlatQuant**](https://arxiv.org/abs/2410.09426) (ICML 2025): 开源W4A4KV4量化实现，含优化CUDA kernel，可直接复现量化加速实验
+- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-a-datacenter-scale-inference-framework/) (NVIDIA, 2025): 开源数据中心级推理框架，提供P/D disaggregation的生产级参考实现

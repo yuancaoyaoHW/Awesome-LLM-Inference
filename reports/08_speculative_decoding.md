@@ -301,3 +301,15 @@ graph TD
 | [SGLang](https://github.com/sgl-project/sglang) | 完整支持 | [EAGLE](https://arxiv.org/abs/2401.15077) + [RadixAttention](https://arxiv.org/abs/2312.07104) |
 | [TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) | 支持 draft model | Draft model（稳定） |
 | [llama.cpp](https://github.com/ggerganov/llama.cpp) | 基础支持 | Draft model（简单） |
+
+---
+
+## 最新进展 (2025-2026)
+
+- [**EAGLE-3**](https://arxiv.org/abs/2503.01840) (Peking University, 2025): Training-Time Test架构，直接预测token+多步生成模拟训练，LLaMA-3.3-70B达4.79x加速
+- [**EAGLE-3.1**](https://github.com/SafeAILab/EAGLE) (SafeAI Lab, 2026): 修复attention drift问题，FC normalization稳定hidden states，长上下文acceptance length提升2x
+- [**DART**](https://arxiv.org/abs/2601.19278) (2026): 扩散模型启发的并行draft，单次forward预测多个future masked positions的logits，消除autoregressive rollout
+- [**Speculative Speculative Decoding (SSD/Saguaro)**](https://arxiv.org/abs/2603.03251) (2026): 二级speculation架构，比SGLang最优baseline快2x，建立新的SOTA
+- [**P-EAGLE**](https://aws.amazon.com/blogs/machine-learning/p-eagle-faster-llm-inference-with-parallel-speculative-decoding-in-vllm) (AWS, 2025): 并行化EAGLE draft生成，4层模型单次forward生成10 tokens，B200上比EAGLE-3快1.69x
+- [**SpecForge**](https://arxiv.org/abs/2603.18567) (2026): 开源生产级speculative decoding训练框架，target-draft解耦+混合并行，Qwen3-235B训练加速9.9x
+- [**Learning To Draft (LTD)**](https://arxiv.org/abs/2603.01639) (2026): 强化学习自适应draft深度和tree大小，DeepSeek-R1上额外加速10%
