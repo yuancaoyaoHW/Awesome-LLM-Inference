@@ -661,10 +661,96 @@ $$
 
 ## 最新进展 (2025-2026)
 
-- [**KVzip**](https://arxiv.org/abs/2505.23416) (NeurIPS 2025): Query-agnostic KV cache eviction，通过上下文重建量化KV重要性，3-4x压缩率且精度损失可忽略
-- [**RDKV**](https://arxiv.org/abs/2605.08317) (2026): 将KV cache压缩建模为率失真优化问题，统一eviction和quantization为单一优化，单A100支持256K上下文
-- [**CriticalKV**](https://arxiv.org/abs/2502.03805) (2025): 从输出扰动角度优化KV cache eviction，证明attention weight不足以判断重要性，需结合value states
-- [**xKV**](https://arxiv.org/abs/2503.18893) (2025): 跨层SVD实现KV cache压缩，利用层间KV的相关性进行联合低秩分解
-- [**MiKV**](https://openreview.net/forum?id=CRQ8JuQDEd) (ICLR 2025): 混合精度KV cache，对evicted KV pairs保留低精度副本而非完全丢弃，避免安全提示泄露和幻觉
-- [**VECTOR**](https://arxiv.org/abs/2605.23258) (2026): 三路分配框架（保留/近似/驱逐），基于可重建性感知的近似替代二元keep-or-drop策略
-- [**IndexMem**](https://arxiv.org/abs/2605.25475) (2026): 学习型KV cache eviction结合latent memory，针对长链式推理(CoT)场景的KV cache优化
+### [KVzip](https://arxiv.org/abs/2505.23416) (NeurIPS 2025)
+
+**问题**: KV cache是长上下文LLM推理的主要内存瓶颈，现有eviction方法依赖query-dependent的attention score判断重要性，导致eviction决策必须在每次query到达时重新计算，无法预先压缩。
+
+**方法**: 提出query-agnostic的KV cache eviction策略，通过上下文重建（context reconstruction）量化每个KV pair的重要性——衡量移除某个KV pair后对整体上下文表示的影响程度；重要性评估独立于具体query，可在prefill阶段一次性完成压缩决策。
+
+**关键结果**:
+- 3-4x KV cache压缩率且精度损失可忽略 `[verified_by_paper]`
+- Query-agnostic特性允许预先压缩，降低在线推理开销 `[verified_by_paper]`
+
+**工程启示**: query-agnostic方法允许在prefill完成后立即压缩KV cache，无需等待decode阶段的query信息；适合需要长期缓存KV的场景（如系统prompt、多轮对话的历史上下文）；可与PagedAttention等内存管理机制组合使用。
+
+**局限性**: 上下文重建的重要性度量可能对某些特定query模式不够精确；压缩率与任务类型相关 `[unverified_claim]`。
+
+---
+
+### [RDKV](https://arxiv.org/abs/2605.08317) (2026)
+
+**问题**: 现有KV cache压缩方法将eviction（丢弃）和quantization（降精度）视为独立技术，缺乏统一的优化框架来决定每个KV单元的最优处理策略。
+
+**方法**: 将KV cache压缩建模为率失真（rate-distortion）优化问题，统一eviction和quantization为单一比特分配优化；从{0, 2, 4, 8, 16} bit中为每个KV单元选择最优bit-width，其中0 bit等价于eviction；通过率失真曲线在压缩率和精度间找到帕累托最优解。
+
+**关键结果**:
+- 单A100支持256K上下文 `[verified_by_paper]`
+- 统一框架优于单独使用eviction或quantization `[unverified_claim]`
+
+**工程启示**: 率失真理论为KV cache压缩提供了严格的理论基础；混合精度分配比统一精度更高效；实际部署中可根据内存预算自动确定最优压缩策略。
+
+**局限性**: 率失真优化本身引入计算开销；最优比特分配需要遍历所有KV单元 `[unverified_claim]`。
+
+---
+
+### [CriticalKV](https://arxiv.org/abs/2502.03805) (2025)
+
+**问题**: 主流KV cache eviction方法基于attention weight判断KV pair重要性，但attention weight高不等于对输出影响大——一个KV pair可能attention weight高但value向量对输出贡献小。
+
+**方法**: 从输出扰动（output perturbation）角度重新定义KV pair重要性，证明需要同时考虑attention weight和value states的联合贡献；提出基于输出扰动最小化的eviction准则，选择移除后对模型输出影响最小的KV pairs。
+
+**关键结果**:
+- 证明attention weight不足以判断KV重要性，需结合value states `[verified_by_paper]`
+- 基于输出扰动的eviction优于纯attention-based方法 `[unverified_claim]`
+
+**工程启示**: 现有基于attention score的eviction方法（如H2O、StreamingLLM）可能存在系统性偏差；value向量的范数和方向信息应纳入重要性评估；为KV cache eviction提供了更严格的理论依据。
+
+**局限性**: 输出扰动的精确计算开销较大，实际实现需要近似 `[unverified_claim]`；理论分析可能在极端稀疏率下不成立。
+
+---
+
+### [xKV](https://arxiv.org/abs/2503.18893) (2025)
+
+**问题**: 单层内的KV cache压缩已接近极限，但不同层之间的KV cache存在大量冗余——相邻层的Key/Value矩阵高度相关，独立压缩每层忽略了这种跨层结构。
+
+**方法**: 提出跨层SVD（cross-layer SVD）实现KV cache压缩，利用层间KV的相关性进行联合低秩分解；将多层的KV矩阵堆叠后进行SVD，用共享的低秩基加上层特定的系数实现压缩；压缩在模型加载时一次性完成。
+
+**关键结果**:
+- 利用层间KV相关性实现额外压缩 `[verified_by_paper]`
+- 跨层联合分解优于逐层独立压缩 `[unverified_claim]`
+
+**工程启示**: 跨层压缩是正交于层内压缩的新维度，可与现有方法叠加使用；SVD分解可离线完成不影响在线推理延迟；适合深层模型（层数多、层间冗余大）的场景。
+
+**局限性**: SVD分解需要校准数据；跨层共享基可能在某些层组合上精度损失较大 `[unverified_claim]`。
+
+---
+
+### [VECTOR](https://arxiv.org/abs/2605.23258) (2026)
+
+**问题**: 现有KV cache管理采用二元keep-or-drop策略，但部分KV pairs虽然不够重要到必须保留，却包含可通过低成本近似恢复的信息，完全丢弃造成不必要的精度损失。
+
+**方法**: 提出三路分配框架（保留/近似/驱逐），引入"近似"作为保留和驱逐之间的中间状态；基于可重建性感知（reconstructability-aware）的策略决定每个KV pair的处理方式——可精确重建的KV用低成本近似替代，不可重建且重要的保留，不可重建且不重要的驱逐。
+
+**关键结果**:
+- 三路策略优于二元keep-or-drop `[verified_by_paper]`
+- 近似替代减少内存占用同时保持精度 `[unverified_claim]`
+
+**工程启示**: 三路分配为KV cache管理提供了更细粒度的控制；可重建性是一个有价值的新信号维度；实际部署中可根据内存压力动态调整三路的比例。
+
+**局限性**: 近似重建的计算开销需要与内存节省权衡；可重建性评估本身需要额外计算 `[unverified_claim]`。
+
+---
+
+### [IndexMem](https://arxiv.org/abs/2605.25475) (2026)
+
+**问题**: 长链式推理（Chain-of-Thought）场景下KV cache增长极快，但推理过程中大量中间步骤的KV在后续不再被引用，传统eviction方法未针对CoT的特殊访问模式优化。
+
+**方法**: 结合学习型KV cache eviction和latent memory机制；通过学习的索引机制预测哪些KV pairs在未来推理步骤中会被访问；被evict的重要信息压缩到latent memory中保留语义摘要，避免完全丢失。
+
+**关键结果**:
+- 针对长链式推理(CoT)场景优化KV cache管理 `[verified_by_paper]`
+- 学习型eviction结合latent memory保持推理质量 `[unverified_claim]`
+
+**工程启示**: CoT/reasoning场景的KV cache访问模式与普通对话不同，需要专门优化；latent memory提供了一种在eviction和完整保留之间的折中方案；学习型方法可以捕获静态规则无法表达的访问模式。
+
+**局限性**: 需要训练eviction策略网络，增加部署复杂度；latent memory的容量和更新策略需要调优 `[unverified_claim]`。

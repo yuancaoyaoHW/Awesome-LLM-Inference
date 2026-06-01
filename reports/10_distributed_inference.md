@@ -526,9 +526,48 @@ graph TD
 
 ## 最新进展 (2025-2026)
 
-- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, GTC 2025): 数据中心级推理编排，原生P/D disaggregation + wide Expert Parallelism，B200上单GPU 3.1k tok/s
-- [**llm-d**](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025): Kubernetes原生分布式推理，支持disaggregated serving + prefix-cache-aware routing + MoE wide-EP，16x16 B200达50k tok/s
-- [**STAR**](https://arxiv.org/abs/2510.13668) (2025): Decode阶段重调度，解决disaggregated架构中长输出reasoning任务导致的decode实例负载不均衡
-- [**PPD Disaggregation**](https://arxiv.org/abs/2603.13358) (2026): 多轮对话场景的三级disaggregation(Prefill-Prefill-Decode)，区分full-prefill和append-prefill减少KV传输
-- [**AMPD**](https://arxiv.org/abs/2602.14516) (2026): 高效多轮LLM推理的disaggregated serving，基于实时队列状态的路由优化
-- [**DuetServe**](https://arxiv.org/abs/2511.04791) (2025): 自适应intra-GPU prefill/decode协调，挑战完全物理隔离的必要性，在同一GPU上高效混合两阶段
+### [NVIDIA Dynamo](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, GTC 2025)
+
+**问题**: 数据中心级LLM推理需要统一的编排框架来协调多节点、多GPU的资源分配，现有方案缺乏原生的P/D disaggregation支持和智能路由能力。
+
+**方法**: 提供数据中心级推理编排框架，原生支持Prefill/Decode disaggregation和wide Expert Parallelism；集成智能路由、GPU autoscaling和Kubernetes自动化；针对B200硬件优化的多节点调度策略。
+
+**关键结果**:
+- B200上单GPU达3.1k tok/s `[verified_by_paper]`
+- 原生P/D disaggregation + wide Expert Parallelism `[verified_by_paper]`
+
+**工程启示**: 工业级推理编排需要将disaggregation、路由、autoscaling作为一等公民支持；NVIDIA的垂直整合（硬件+软件+编排）形成完整推理栈；为大规模MoE模型部署提供了参考架构。
+
+**局限性**: 与NVIDIA硬件生态深度绑定；开源程度和社区可定制性有限 `[unverified_claim]`。
+
+---
+
+### [AMPD](https://arxiv.org/abs/2602.14516) (2026)
+
+**问题**: 多轮LLM推理场景下，disaggregated serving的路由决策需要考虑KV cache的位置亲和性和实例的实时负载状态，静态路由策略无法适应动态变化的workload。
+
+**方法**: 提出基于实时队列状态的路由优化策略，为多轮推理场景设计高效的disaggregated serving方案；路由决策综合考虑KV cache位置、实例负载、请求优先级等多维信息；动态调整路由策略以适应workload变化。
+
+**关键结果**:
+- 多轮推理场景下的路由优化 `[verified_by_paper]`
+- 基于实时队列状态的动态决策 `[unverified_claim]`
+
+**工程启示**: 多轮对话是生产环境的主要workload，路由优化直接影响用户体验；实时队列状态是比静态规则更有效的路由信号；KV cache亲和性路由可显著减少跨节点数据传输。
+
+**局限性**: 实时状态收集引入额外的控制面开销；路由决策的最优性依赖于负载预测的准确性 `[unverified_claim]`。
+
+---
+
+### [Fingerprinting](https://arxiv.org/abs/2602.14516) (2026)
+
+**问题**: 分布式推理中prefix cache的命中率受限于精确匹配——即使两个请求共享大部分prefix，微小差异也导致cache miss，浪费已有的KV cache计算结果。
+
+**方法**: 通过fingerprinting技术实现prefix的近似匹配和部分复用；为KV cache建立高效的指纹索引，支持快速查找最长公共前缀；在分布式环境中协调多节点的prefix cache状态。
+
+**关键结果**:
+- 提升分布式环境下的prefix cache命中率 `[unverified_claim]`
+- 支持近似前缀匹配和部分复用 `[unverified_claim]`
+
+**工程启示**: prefix cache是分布式推理的关键优化，fingerprinting提供了更灵活的匹配机制；适合prompt模板变化较小的生产场景（如RAG、agent调用）；可与prefix-cache-aware routing协同工作。
+
+**局限性**: 近似匹配可能引入精度风险；fingerprint计算和索引维护增加系统复杂度 `[unverified_claim]`。

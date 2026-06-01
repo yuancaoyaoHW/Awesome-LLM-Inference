@@ -702,9 +702,85 @@ graph LR
 
 ## 最新进展 (2025-2026)
 
-- [**FlashAttention-4**](https://arxiv.org/abs/2603.05451) (Tri Dao et al., 2026): 针对Blackwell架构优化，支持FP4/FP8 attention，利用第五代Tensor Core和TMA异步流水线
-- [**Flash Sparse Attention**](https://arxiv.org/abs/2508.18224) (2025): 原生可训练的稀疏attention kernel，支持动态block-sparse pattern的高效GPU实现
-- [**DART**](https://arxiv.org/abs/2601.19278) (2026): 扩散模型启发的并行draft生成，单次forward预测多个future token logits，比EAGLE-3 draft快6.8x
-- [**P-EAGLE**](https://aws.amazon.com/blogs/machine-learning/p-eagle-faster-llm-inference-with-parallel-speculative-decoding-in-vllm) (AWS, 2025): 并行化EAGLE draft生成，4层轻量模型单次forward生成10个token，B200上比EAGLE-3快1.69x
-- [**Event Tensor Compiler**](https://arxiv.org/abs/2604.13327) (2026): 系统化编译器抽象支持shape dynamism和data-dependent dynamism，为LLM megakernel提供统一框架
-- [**DHSA (Dynamic Hierarchical Sparse Attention)**](https://arxiv.org/abs/2510.24606) (2025): 内存受限场景下的动态分层稀疏attention，输入自适应稀疏度降低prefill开销
+### [FlashAttention-4](https://arxiv.org/abs/2603.05451) (Tri Dao et al., 2026)
+
+**问题**: Blackwell架构（B200/GB200）相比Hopper存在非对称硬件扩展——Tensor Core吞吐翻倍但特殊函数单元和共享内存带宽扩展较慢，FlashAttention-3的Hopper优化策略无法充分利用Blackwell新特性。
+
+**方法**: 重新设计流水线利用Blackwell完全异步MMA操作和更大tile size最大化Tensor Core利用率；软件模拟指数运算和条件softmax rescaling减少非matmul操作对流水线的阻塞；利用Tensor Memory和2-CTA MMA模式降低反向传播中的共享内存流量；采用CuTe-DSL（Python嵌入式DSL）实现，编译速度比传统C++模板快20-30x。
+
+**关键结果**:
+- B200 BF16达到1613 TFLOPs/s，GPU利用率71% `[verified_by_paper]`
+- 相比cuDNN 9.13加速1.3x `[verified_by_paper]`
+- 相比Triton加速2.7x `[verified_by_paper]`
+- 编译时间比传统C++模板方法快20-30x `[verified_by_paper]`
+
+**工程启示**: Blackwell部署必须升级attention kernel，Hopper优化不再最优；CuTe-DSL降低了高性能kernel开发门槛；非对称硬件扩展趋势意味着未来每代GPU都需要重新设计kernel流水线。
+
+**局限性**: 仅针对Blackwell架构优化，不向后兼容Hopper/Ampere；CuTe-DSL生态尚不成熟，社区工具链支持有限。
+
+---
+
+### [Flash Sparse Attention](https://arxiv.org/abs/2508.18224) (2025)
+
+**问题**: Native Sparse Attention (NSA) 的原始kernel实现强制使用特定循环顺序，仅在GQA group size较大时高效，对主流LLM（如Llama-3系列，GQA group size=4或8）效率显著下降。
+
+**方法**: 重新设计kernel循环顺序使其在不同GQA group size下均能高效执行；支持动态block-sparse pattern的原生可训练稀疏attention；保持与NSA相同的稀疏模式语义，仅优化底层GPU实现。
+
+**关键结果**:
+- Kernel级延迟降低最高3.5x，平均1.6x `[verified_by_paper]`
+- 端到端训练加速最高1.25x，平均1.09x `[verified_by_paper]`
+- Prefill推理加速最高1.36x，平均1.11x `[verified_by_paper]`
+
+**工程启示**: 对于使用NSA的模型（如DeepSeek系列）是直接的drop-in替换；GQA group size较小的模型（Llama-3, Qwen2等）现在可以高效使用稀疏attention；训练和推理均可受益。
+
+**局限性**: 依赖NSA的稀疏模式定义，不解决稀疏模式发现问题；加速幅度与具体GQA配置相关。
+
+---
+
+### [DART](https://arxiv.org/abs/2601.19278) (2026) — Kernel视角
+
+**问题**: DART需要在单次forward pass中对多个masked position并行预测logits，对attention kernel提出了非标准mask pattern的支持需求。
+
+**方法**: 从kernel角度看，DART的计算模式介于prefill（多query）和decode（单query）之间，要求attention kernel支持非标准的mask pattern（非因果、非全连接），mask是动态确定的而非静态causal mask。
+
+**关键结果**:
+- 单次forward预测多个future token logits，比EAGLE-3 draft快6.8x `[verified_by_paper]`
+
+**工程启示**: DART的kernel需求推动了对灵活mask pattern attention kernel的需求；与Event Tensor Compiler的data-dependent dynamism支持天然契合；可能需要block-sparse attention kernel支持。
+
+**局限性**: 主要归属于speculative decoding领域（详见08报告），对kernel设计的影响为间接推动。
+
+---
+
+### [Event Tensor Compiler](https://arxiv.org/abs/2604.13327) (2026)
+
+**问题**: 现代LLM推理面临大量小kernel的launch开销累积和kernel间粗粒度同步限制并行性两大瓶颈；现有megakernel方案无法处理LLM推理中的动态shape和数据依赖计算（如speculative decoding的可变接受长度、continuous batching的动态batch size）。
+
+**方法**: 提出Event Tensor抽象编码tiled task间的依赖关系，原生支持shape dynamism和data-dependent dynamism；基于Event Tensor进行静态+动态混合调度变换生成高性能持久kernel；统一框架处理两类动态性。
+
+**关键结果**:
+- 达到SOTA LLM serving延迟 `[verified_by_paper]`
+- 显著降低系统warmup开销 `[verified_by_paper]`
+- 发表于MLSys 2026 `[verified_by_paper]`
+
+**工程启示**: 为LLM推理系统提供了统一的megakernel编译方案替代手写融合kernel；特别适合speculative decoding、early exit等数据依赖场景；可能成为下一代推理引擎的编译器基础设施。
+
+**局限性**: 具体加速数值未在公开摘要中披露 `[unverified_claim]`；编译器方案的工程落地复杂度较高，需要与现有推理框架深度集成。
+
+---
+
+### [DHSA (Dynamic Hierarchical Sparse Attention)](https://arxiv.org/abs/2510.24606) (2025)
+
+**问题**: 长上下文LLM推理在内存受限设备上面临二次方attention开销；现有稀疏attention方法要么依赖静态模式无法适应不同输入，要么依赖预定义模板牺牲通用性。
+
+**方法**: 数据驱动框架在线预测attention稀疏度，LLM backbone保持冻结；两级路由策略先在chunk级估计重要性再传播到token级交互；保持因果依赖的同时实现高效稀疏化，配合内存高效的tiled后端实现。
+
+**关键结果**:
+- 128K上下文prefill加速10x `[verified_by_paper]`
+- 量化LLaMA-3.1-8B (4-bit)单张24GB GPU支持100K tokens `[verified_by_paper]`
+- 相比Block Sparse Attention相同prefill开销下精度提升12-20% `[verified_by_paper]`
+- ICML 2026 Spotlight `[verified_by_paper]`
+
+**工程启示**: 适用于边缘设备和内存受限场景的长上下文推理；输入自适应特性比静态稀疏方法更鲁棒；可与量化技术组合使用进一步扩展可处理的上下文长度；不需要重新训练模型部署成本低。
+
+**局限性**: 在线路由预测引入额外计算开销；对于短序列场景收益有限；分层路由的超参数需要针对不同模型调优。

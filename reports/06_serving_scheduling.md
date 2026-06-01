@@ -337,9 +337,65 @@ graph TB
 
 ## 最新进展 (2025-2026)
 
-- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, GTC 2025): 数据中心级推理编排框架，原生P/D disaggregation、智能路由和多节点调度
-- [**STAR**](https://arxiv.org/abs/2510.13668) (2025): Decode阶段重调度算法，解决disaggregated架构中decode实例间的负载不均衡问题
-- [**PPD Disaggregation**](https://arxiv.org/abs/2603.13358) (2026): 区分full-prefill和append-prefill，多轮对话场景下减少KV传输带宽消耗一个数量级
-- [**Fluid-Guided Online Scheduling**](https://arxiv.org/abs/2504.11320) (2025): 将LLM推理调度建模为流体近似的在线优化问题，考虑内存约束的最优调度策略
-- [**llm-d**](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025): Kubernetes原生分布式推理框架，prefix-cache-aware routing + SLO-aware autoscaling，H100上TTFT降低40%
-- [**DuetServe**](https://arxiv.org/abs/2511.04791) (2025): 自适应隔离策略，挑战"所有prefill都需要物理隔离"的假设，在同一GPU上协调prefill和decode
+### [STAR](https://arxiv.org/abs/2510.13668) (2025)
+
+**问题**: 在Prefill-Decode disaggregated架构中，decode实例间存在严重的负载不均衡问题——长输出的reasoning任务会导致部分decode实例过载而其他实例空闲。
+
+**方法**: 提出decode阶段的请求重调度算法，通过监控各decode实例的负载状态，在运行时将请求从过载实例迁移到空闲实例；重调度决策基于请求的剩余生成长度预估和实例当前队列深度。
+
+**关键结果**:
+- 解决disaggregated架构中decode实例间的负载不均衡 `[verified_by_paper]`
+- 针对长输出reasoning任务场景效果显著 `[unverified_claim]`
+
+**工程启示**: disaggregated serving不仅需要优化prefill-decode分离，还需要关注decode实例间的动态负载均衡；对于输出长度方差大的workload（如CoT推理），重调度机制是必要的。
+
+**局限性**: 请求迁移涉及KV cache传输开销；剩余生成长度预估的准确性影响调度质量 `[unverified_claim]`。
+
+---
+
+### [PPD Disaggregation](https://arxiv.org/abs/2603.13358) (2026)
+
+**问题**: 传统Prefill-Decode两级disaggregation在多轮对话场景下效率低下——每轮对话的append-prefill（处理新用户输入+已有KV cache）与首轮full-prefill的计算特征差异大，混合处理导致资源浪费和大量KV cache跨节点传输。
+
+**方法**: 区分full-prefill和append-prefill两种不同的prefill类型，提出三级Prefill-Prefill-Decode disaggregation架构；将append-prefill请求路由到已持有对应KV cache的节点，避免跨节点KV传输；针对两种prefill类型分别优化资源配置。
+
+**关键结果**:
+- 多轮对话场景下KV传输带宽消耗减少一个数量级 `[verified_by_paper]`
+- 三级架构相比两级disaggregation显著降低网络开销 `[unverified_claim]`
+
+**工程启示**: 多轮对话是生产环境的主要workload模式，PPD架构直接解决了实际部署痛点；KV cache locality-aware routing是减少网络开销的关键；系统设计需要区分不同类型的prefill操作。
+
+**局限性**: 三级架构增加了系统复杂度和调度决策空间；需要维护KV cache位置的全局元数据 `[unverified_claim]`。
+
+---
+
+### [Fluid-Guided Online Scheduling](https://arxiv.org/abs/2504.11320) (2025)
+
+**问题**: LLM推理调度面临内存约束下的在线优化难题——请求到达时间和生成长度未知，需要在有限GPU内存下最大化吞吐量同时满足延迟SLO。
+
+**方法**: 将LLM推理调度建模为流体近似（fluid approximation）的在线优化问题；通过连续松弛将离散调度决策转化为可求解的凸优化；考虑KV cache内存约束作为容量限制，推导出具有理论保证的在线调度策略。
+
+**关键结果**:
+- 提出具有理论最优性保证的在线调度策略 `[verified_by_paper]`
+- 在内存约束下实现接近离线最优的调度性能 `[unverified_claim]`
+
+**工程启示**: 流体近似为LLM调度提供了理论框架，可指导启发式算法设计；内存约束是LLM调度的核心瓶颈，显式建模比隐式处理更有效；理论保证有助于评估现有调度器的优化空间。
+
+**局限性**: 流体近似在请求到达率波动大时精度下降；实际部署中需要与具体推理引擎的内存管理机制集成 `[unverified_claim]`。
+
+---
+
+### [DuetServe](https://arxiv.org/abs/2511.04791) (2025)
+
+**问题**: 完全物理隔离prefill和decode到不同GPU的disaggregated方案虽然消除了干扰，但导致GPU利用率低——prefill实例在等待新请求时空闲，decode实例在batch较小时计算利用率不足。
+
+**方法**: 提出自适应intra-GPU隔离策略，挑战"所有prefill都需要物理隔离"的假设；根据当前负载动态决定是否在同一GPU上混合执行prefill和decode；通过细粒度的时间片划分和优先级调度减少两阶段间的干扰。
+
+**关键结果**:
+- 在同一GPU上高效协调prefill和decode执行 `[verified_by_paper]`
+- 相比完全隔离方案提升GPU利用率 `[unverified_claim]`
+- 相比完全混合方案降低尾延迟 `[unverified_claim]`
+
+**工程启示**: disaggregation不是非此即彼的选择，自适应策略可以在隔离和共享间找到最优平衡点；负载较低时混合执行更经济，负载高时隔离更稳定；实际部署应根据workload特征动态调整隔离程度。
+
+**局限性**: 自适应决策引入额外的调度复杂度；在极端负载下可能退化为完全隔离 `[unverified_claim]`。

@@ -437,10 +437,81 @@ graph TD
 
 ## 最新进展 (2025-2026)
 
-- [**EAGLE-3**](https://arxiv.org/abs/2503.01840) (Peking University, 2025): Training-Time Test架构，直接预测token+多步生成模拟训练，LLaMA-3.3-70B达4.79x加速
-- [**EAGLE-3.1**](https://github.com/SafeAILab/EAGLE) (SafeAI Lab, 2026): 修复attention drift问题，FC normalization稳定hidden states，长上下文acceptance length提升2x
-- [**DART**](https://arxiv.org/abs/2601.19278) (2026): 扩散模型启发的并行draft，单次forward预测多个future masked positions的logits，消除autoregressive rollout
-- [**Speculative Speculative Decoding (SSD/Saguaro)**](https://arxiv.org/abs/2603.03251) (2026): 二级speculation架构，比SGLang最优baseline快2x，建立新的SOTA
-- [**P-EAGLE**](https://aws.amazon.com/blogs/machine-learning/p-eagle-faster-llm-inference-with-parallel-speculative-decoding-in-vllm) (AWS, 2025): 并行化EAGLE draft生成，4层模型单次forward生成10 tokens，B200上比EAGLE-3快1.69x
-- [**SpecForge**](https://arxiv.org/abs/2603.18567) (2026): 开源生产级speculative decoding训练框架，target-draft解耦+混合并行，Qwen3-235B训练加速9.9x
-- [**Learning To Draft (LTD)**](https://arxiv.org/abs/2603.01639) (2026): 强化学习自适应draft深度和tree大小，DeepSeek-R1上额外加速10%
+### [EAGLE-3](https://arxiv.org/abs/2503.01840) (Peking University, 2025)
+
+**问题**: 现有speculative decoding的draft模型需要额外训练且与target模型的分布对齐困难，导致acceptance rate受限于draft质量。
+
+**方法**: 提出Training-Time Test架构，将draft模型的训练目标从模仿target分布改为直接预测token+多步生成模拟训练；通过在训练时模拟推理时的多步生成过程，使draft模型学会在autoregressive rollout中保持高质量预测。
+
+**关键结果**:
+- LLaMA-3.3-70B达4.79x加速 `[verified_by_paper]`
+- Training-Time Test策略显著提升draft质量 `[unverified_claim]`
+
+**工程启示**: draft模型的训练策略对speculative decoding性能至关重要；Training-Time Test思想可推广到其他draft架构；大模型上的加速比更显著，适合生产环境部署。
+
+**局限性**: 需要针对每个target模型训练对应的draft模型；训练成本随target模型规模增长 `[unverified_claim]`。
+
+---
+
+### [DART](https://arxiv.org/abs/2601.19278) (2026)
+
+**问题**: 传统speculative decoding的draft阶段采用autoregressive生成，draft模型需要多次sequential forward pass，draft延迟随speculation depth线性增长。
+
+**方法**: 受扩散模型启发，提出并行draft生成——单次forward pass中同时预测多个future masked positions的logits，消除autoregressive rollout；通过mask-predict机制，draft模型一次性输出所有候选token的概率分布，无需逐步生成。
+
+**关键结果**:
+- 单次forward预测多个future token logits `[verified_by_paper]`
+- 比EAGLE-3 draft快6.8x `[verified_by_paper]`
+- 消除autoregressive rollout的sequential依赖 `[verified_by_paper]`
+
+**工程启示**: 并行draft从根本上改变了draft延迟的scaling特性——从O(depth)降为O(1)；适合需要深speculation depth的场景（如reasoning任务）；对attention kernel提出了非标准mask pattern的支持需求。
+
+**局限性**: 并行预测的token间缺乏条件依赖，可能降低acceptance rate；需要支持arbitrary mask pattern的高效attention kernel `[unverified_claim]`。
+
+---
+
+### [Saguaro (Speculative Speculative Decoding)](https://arxiv.org/abs/2603.03251) (2026)
+
+**问题**: 单级speculation的加速比受限于draft模型质量和verification开销的权衡——更大的draft模型提高acceptance rate但增加draft延迟，更小的draft模型快但acceptance rate低。
+
+**方法**: 提出二级speculation架构，用一个极轻量的"speculator of speculator"为draft模型本身做speculation；外层draft模型为target验证生成候选，内层micro-draft为外层draft加速生成；两级speculation的组合突破了单级的加速上限。
+
+**关键结果**:
+- 比SGLang最优baseline快2x `[verified_by_paper]`
+- 建立新的speculative decoding SOTA `[verified_by_paper]`
+
+**工程启示**: 多级speculation是突破单级加速上限的有效方向；系统设计需要平衡多级pipeline的复杂度和收益；适合target模型极大（如405B+）的场景，此时多级speculation的收益最大化。
+
+**局限性**: 二级架构增加了系统复杂度和调试难度；需要同时维护和优化两个draft模型 `[unverified_claim]`。
+
+---
+
+### [SpecForge](https://arxiv.org/abs/2603.18567) (2026)
+
+**问题**: 现有speculative decoding的draft模型训练缺乏标准化框架，训练效率低且难以扩展到大规模target模型；target-draft的联合训练存在梯度干扰和资源分配问题。
+
+**方法**: 提出开源生产级speculative decoding训练框架，实现target-draft解耦训练+混合并行；通过解耦target和draft的训练过程避免梯度干扰；支持多种并行策略（数据并行、张量并行、流水线并行）的混合使用以扩展到大规模模型。
+
+**关键结果**:
+- Qwen3-235B训练加速9.9x `[verified_by_paper]`
+- 开源生产级框架，支持多种draft架构 `[verified_by_paper]`
+
+**工程启示**: draft模型训练的工程化和标准化对speculative decoding的大规模部署至关重要；target-draft解耦训练避免了联合训练的复杂性；混合并行策略使得为超大模型训练draft成为可能。
+
+**局限性**: 框架的通用性可能牺牲针对特定模型的优化空间；大规模训练仍需要显著的计算资源 `[unverified_claim]`。
+
+---
+
+### [Learning To Draft (LTD)](https://arxiv.org/abs/2603.01639) (2026)
+
+**问题**: 现有speculative decoding使用固定的draft深度和tree结构，无法根据输入难度和上下文动态调整——简单token浪费过多draft计算，困难token的固定depth不足以命中。
+
+**方法**: 使用强化学习训练自适应策略网络，动态决定每步的draft深度和tree大小；策略网络根据当前上下文和历史acceptance pattern学习最优的speculation配置；奖励函数平衡生成速度和计算开销。
+
+**关键结果**:
+- DeepSeek-R1上额外加速10% `[verified_by_paper]`
+- 自适应策略优于固定配置 `[verified_by_paper]`
+
+**工程启示**: 自适应draft配置是speculative decoding的"最后一公里"优化；RL-based方法可以学习到人工规则难以表达的最优策略；对于输出复杂度变化大的任务（如代码生成、数学推理）收益更明显。
+
+**局限性**: RL训练需要大量环境交互，训练成本较高；策略网络本身引入少量推理开销；策略可能对训练分布外的输入泛化不足 `[unverified_claim]`。

@@ -610,10 +610,99 @@ graph TD
 
 ## 最新进展 (2025-2026)
 
-- [**FlatQuant**](https://arxiv.org/abs/2410.09426) (ICML 2025): 通过Kronecker结构仿射变换平滑outlier，W4A4KV4 SOTA，LLaMA-3-70B精度损失<1%，prefill加速2.3x
-- [**Quartet**](https://arxiv.org/abs/2505.14669) (NeurIPS 2025): 原生FP4训练框架，揭示低精度scaling law，Blackwell架构上FP4训练与FP16精度相当
-- [**FP4 All the Way**](https://arxiv.org/abs/2505.19115) (NeurIPS 2025, Intel): 首次实现全FP4训练(weight+activation+gradient)，7B模型在256 Gaudi2上训练，精度接近BF16
-- [**LittleBit**](https://arxiv.org/abs/2506.13771) (NeurIPS 2025): 超低比特量化框架(0.1 BPW)，低秩latent分解+二值化，Llama2-13B压缩至<0.9GB
-- [**OstQuant**](https://arxiv.org/abs/2501.13987) (ICLR 2025): 正交和缩放变换优化量化分布拟合，改进W4A4精度
-- [**RDKV**](https://arxiv.org/abs/2605.08317) (2026): 率失真比特分配统一eviction和quantization，从{0,2,4,8,16}bit中为每个KV单元选择最优bit-width
-- [**ICQuant**](https://arxiv.org/abs/2505.00850) (2025): Index Coding实现低比特LLM量化，利用编码理论优化codebook设计
+### [FlatQuant](https://arxiv.org/abs/2410.09426) (ICML 2025)
+
+**问题**: 低比特量化（W4A4）面临activation outlier导致的精度崩溃问题——少数极端值使得均匀量化的有效比特数大幅降低，尤其在大模型上精度损失严重。
+
+**方法**: 通过Kronecker结构的仿射变换（affine transformation）在量化前平滑activation分布中的outlier；变换矩阵采用Kronecker积结构以降低参数量和计算开销；变换参数通过校准数据学习，使变换后的分布更适合均匀量化。
+
+**关键结果**:
+- W4A4KV4达到SOTA精度 `[verified_by_paper]`
+- LLaMA-3-70B精度损失<1% `[verified_by_paper]`
+- Prefill加速2.3x `[verified_by_paper]`
+
+**工程启示**: Kronecker结构变换在精度和开销间取得良好平衡；W4A4KV4是当前大模型部署的实用量化配置；平滑变换可与其他量化方法组合使用进一步提升精度。
+
+**局限性**: 需要校准数据学习变换参数；Kronecker结构限制了变换的表达能力 `[unverified_claim]`。
+
+---
+
+### [Quartet](https://arxiv.org/abs/2505.14669) (NeurIPS 2025)
+
+**问题**: FP4训练的可行性和scaling behavior未被系统研究——是否存在低精度训练的scaling law，FP4训练在什么模型规模下能匹配FP16精度。
+
+**方法**: 提出原生FP4训练框架，系统研究低精度训练的scaling law；揭示FP4训练存在与模型规模相关的精度-效率权衡曲线；在Blackwell架构上利用原生FP4 Tensor Core支持实现高效训练。
+
+**关键结果**:
+- 揭示低精度scaling law `[verified_by_paper]`
+- Blackwell架构上FP4训练与FP16精度相当 `[verified_by_paper]`
+- 为FP4训练提供系统性理论和实验支撑 `[unverified_claim]`
+
+**工程启示**: FP4训练在Blackwell及后续架构上具有实用价值；scaling law指导了何时使用FP4训练是划算的；为推理量化提供了更好的起点——FP4训练的模型天然对低精度友好。
+
+**局限性**: 依赖Blackwell架构的原生FP4支持，旧硬件无法受益；scaling law的适用范围需要更多模型验证 `[unverified_claim]`。
+
+---
+
+### [FP4 All the Way](https://arxiv.org/abs/2505.19115) (NeurIPS 2025, Intel)
+
+**问题**: 现有低精度训练仅将部分计算（如weight或activation）降到FP4，gradient仍保持高精度，限制了整体训练加速比。
+
+**方法**: 首次实现全FP4训练——weight、activation和gradient均使用FP4格式；通过精心设计的数值稳定技术（如loss scaling、gradient clipping的FP4适配）保证训练收敛；在Intel Gaudi2加速器上验证大规模训练可行性。
+
+**关键结果**:
+- 首次实现全FP4训练(weight+activation+gradient) `[verified_by_paper]`
+- 7B模型在256 Gaudi2上训练，精度接近BF16 `[verified_by_paper]`
+
+**工程启示**: 全FP4训练将训练内存和计算需求同时降低，对大规模预训练意义重大；gradient的FP4化是关键技术突破；为未来硬件设计提供了全链路低精度的可行性证据。
+
+**局限性**: 目前仅在Gaudi2上验证，GPU上的实现需要额外工程；全FP4对训练超参数更敏感 `[unverified_claim]`。
+
+---
+
+### [LittleBit](https://arxiv.org/abs/2506.13771) (NeurIPS 2025)
+
+**问题**: 超低比特量化（<1 BPW）在现有方法下精度崩溃严重，无法在极端压缩率下保持模型可用性。
+
+**方法**: 提出低秩latent分解+二值化的超低比特量化框架；将权重矩阵分解为低秩部分和残差，低秩部分保持较高精度，残差进行极端二值化；通过联合优化分解和量化参数最小化重建误差。
+
+**关键结果**:
+- 实现0.1 BPW超低比特量化 `[verified_by_paper]`
+- Llama2-13B压缩至<0.9GB `[verified_by_paper]`
+- 在极端压缩率下保持基本可用性 `[unverified_claim]`
+
+**工程启示**: 低秩分解+量化的组合是突破超低比特精度瓶颈的有效路径；0.1 BPW级别的压缩使得大模型在极端资源受限设备上部署成为可能；适合对精度要求不高但对模型大小极度敏感的边缘场景。
+
+**局限性**: 0.1 BPW下精度损失仍然显著，仅适合特定应用场景；低秩分解增加了推理时的计算步骤 `[unverified_claim]`。
+
+---
+
+### [OstQuant](https://arxiv.org/abs/2501.13987) (ICLR 2025)
+
+**问题**: W4A4量化中weight和activation的分布不匹配导致量化误差累积，现有方法（如GPTQ、AWQ）主要优化weight量化而忽略activation分布的适配。
+
+**方法**: 通过正交变换（orthogonal transformation）和缩放变换（scaling transformation）联合优化量化分布拟合；正交变换旋转weight/activation空间使其更适合均匀量化；缩放变换调整各通道的动态范围匹配量化网格。
+
+**关键结果**:
+- 改进W4A4精度，优于现有PTQ方法 `[verified_by_paper]`
+- 正交+缩放变换的组合效果优于单独使用 `[unverified_claim]`
+
+**工程启示**: 正交变换是一种保信息的分布调整手段，不引入信息损失；与FlatQuant的Kronecker变换思路互补，可探索组合使用；变换矩阵可预计算融入weight中，不增加推理开销。
+
+**局限性**: 正交变换的求解需要SVD等较重的计算；对不同层可能需要不同的变换策略 `[unverified_claim]`。
+
+---
+
+### [ICQuant](https://arxiv.org/abs/2505.00850) (2025)
+
+**问题**: 传统向量量化（VQ）的codebook设计依赖K-means等启发式方法，在低比特场景下codebook利用率低且重建误差大。
+
+**方法**: 利用编码理论（Index Coding）优化codebook设计，将量化问题转化为信息论中的率失真编码问题；通过编码理论的最优性保证设计更高效的codebook；实现低比特LLM量化的精度提升。
+
+**关键结果**:
+- 利用编码理论优化codebook设计 `[verified_by_paper]`
+- 低比特场景下优于传统VQ方法 `[unverified_claim]`
+
+**工程启示**: 信息论工具为量化方法设计提供了新的理论视角；编码理论的最优性保证可指导codebook容量规划；适合与group quantization等方法结合使用。
+
+**局限性**: 编码理论的最优解可能计算复杂度高，需要近似算法；codebook查找的硬件效率需要专门优化 `[unverified_claim]`。
