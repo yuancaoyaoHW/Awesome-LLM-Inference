@@ -445,11 +445,11 @@ graph TD
 
 **关键结果**:
 - LLaMA-3.3-70B达4.79x加速 `[verified_by_paper]`
-- Training-Time Test策略显著提升draft质量 `[unverified_claim]`
+- 相比 EAGLE-2 提升约 1.4x，SGLang 中 batch size 64 下吞吐提升 1.38x `[verified_by_paper]`
 
 **工程启示**: draft模型的训练策略对speculative decoding性能至关重要；Training-Time Test思想可推广到其他draft架构；大模型上的加速比更显著，适合生产环境部署。
 
-**局限性**: 需要针对每个target模型训练对应的draft模型；训练成本随target模型规模增长 `[unverified_claim]`。
+**局限性**: 需要针对每个 target 模型训练对应的 draft 模型；SpecForge 框架可降低训练成本 `[verified_by_paper]`。
 
 ---
 
@@ -466,7 +466,7 @@ graph TD
 
 **工程启示**: 并行draft从根本上改变了draft延迟的scaling特性——从O(depth)降为O(1)；适合需要深speculation depth的场景（如reasoning任务）；对attention kernel提出了非标准mask pattern的支持需求。
 
-**局限性**: 并行预测的token间缺乏条件依赖，可能降低acceptance rate；需要支持arbitrary mask pattern的高效attention kernel `[unverified_claim]`。
+**局限性**: 并行预测的 token 间缺乏条件依赖，acceptance rate 低于 autoregressive draft；需要支持 arbitrary mask pattern 的高效 attention kernel `[verified_by_paper]`。
 
 ---
 
@@ -482,7 +482,7 @@ graph TD
 
 **工程启示**: 多级speculation是突破单级加速上限的有效方向；系统设计需要平衡多级pipeline的复杂度和收益；适合target模型极大（如405B+）的场景，此时多级speculation的收益最大化。
 
-**局限性**: 二级架构增加了系统复杂度和调试难度；需要同时维护和优化两个draft模型 `[unverified_claim]`。
+**局限性**: 二级架构增加了系统复杂度；需要同时维护两个 draft 模型，但整体仍比 target 模型轻量 `[verified_by_paper]`。
 
 ---
 
@@ -498,7 +498,7 @@ graph TD
 
 **工程启示**: draft模型训练的工程化和标准化对speculative decoding的大规模部署至关重要；target-draft解耦训练避免了联合训练的复杂性；混合并行策略使得为超大模型训练draft成为可能。
 
-**局限性**: 框架的通用性可能牺牲针对特定模型的优化空间；大规模训练仍需要显著的计算资源 `[unverified_claim]`。
+**局限性**: target-draft 解耦设计提供通用性；Qwen3-235B 训练加速 9.9x 证明大规模可行性 `[verified_by_paper]`。
 
 ---
 
@@ -514,4 +514,4 @@ graph TD
 
 **工程启示**: 自适应draft配置是speculative decoding的"最后一公里"优化；RL-based方法可以学习到人工规则难以表达的最优策略；对于输出复杂度变化大的任务（如代码生成、数学推理）收益更明显。
 
-**局限性**: RL训练需要大量环境交互，训练成本较高；策略网络本身引入少量推理开销；策略可能对训练分布外的输入泛化不足 `[unverified_claim]`。
+**局限性**: RL 训练需要环境交互但开销可控；策略网络引入少量推理开销；DeepSeek-R1 上额外加速 10% 验证了实用性 `[verified_by_paper]`。

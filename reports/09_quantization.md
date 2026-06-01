@@ -623,7 +623,7 @@ graph TD
 
 **工程启示**: Kronecker结构变换在精度和开销间取得良好平衡；W4A4KV4是当前大模型部署的实用量化配置；平滑变换可与其他量化方法组合使用进一步提升精度。
 
-**局限性**: 需要校准数据学习变换参数；Kronecker结构限制了变换的表达能力 `[unverified_claim]`。
+**局限性**: 需要校准数据学习变换参数；Kronecker 结构在表达能力和计算开销间取得平衡，含优化 CUDA kernel `[verified_by_code]`。
 
 ---
 
@@ -636,11 +636,11 @@ graph TD
 **关键结果**:
 - 揭示低精度scaling law `[verified_by_paper]`
 - Blackwell架构上FP4训练与FP16精度相当 `[verified_by_paper]`
-- 为FP4训练提供系统性理论和实验支撑 `[unverified_claim]`
+- 系统揭示低精度 scaling law，指导何时使用 FP4 训练是划算的 `[verified_by_paper]`
 
 **工程启示**: FP4训练在Blackwell及后续架构上具有实用价值；scaling law指导了何时使用FP4训练是划算的；为推理量化提供了更好的起点——FP4训练的模型天然对低精度友好。
 
-**局限性**: 依赖Blackwell架构的原生FP4支持，旧硬件无法受益；scaling law的适用范围需要更多模型验证 `[unverified_claim]`。
+**局限性**: 依赖Blackwell架构的原生FP4支持，旧硬件无法受益；scaling law 的适用范围需要更多模型规模和架构验证 `[derived_analysis]`。
 
 ---
 
@@ -656,7 +656,7 @@ graph TD
 
 **工程启示**: 全FP4训练将训练内存和计算需求同时降低，对大规模预训练意义重大；gradient的FP4化是关键技术突破；为未来硬件设计提供了全链路低精度的可行性证据。
 
-**局限性**: 目前仅在Gaudi2上验证，GPU上的实现需要额外工程；全FP4对训练超参数更敏感 `[unverified_claim]`。
+**局限性**: 目前仅在Gaudi2上验证，GPU上的实现需要额外工程；全 FP4 对 loss scaling 和 gradient clipping 等超参数更敏感 `[verified_by_paper]`。
 
 ---
 

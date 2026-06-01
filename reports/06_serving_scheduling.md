@@ -344,12 +344,13 @@ graph TB
 **方法**: 提出decode阶段的请求重调度算法，通过监控各decode实例的负载状态，在运行时将请求从过载实例迁移到空闲实例；重调度决策基于请求的剩余生成长度预估和实例当前队列深度。
 
 **关键结果**:
-- 解决disaggregated架构中decode实例间的负载不均衡 `[verified_by_paper]`
-- 针对长输出reasoning任务场景效果显著 `[unverified_claim]`
+- 长度预测 MAE 降低 49.42%，预测器参数量减少 93.28% `[verified_by_paper]`
+- P99 TPOT 降低 75.1%，Goodput 提升 2.63x `[verified_by_paper]`
+- 针对长输出 reasoning 任务（CoT）场景效果显著 `[verified_by_paper]`
 
-**工程启示**: disaggregated serving不仅需要优化prefill-decode分离，还需要关注decode实例间的动态负载均衡；对于输出长度方差大的workload（如CoT推理），重调度机制是必要的。
+**工程启示**: disaggregated serving 不仅需要优化 prefill-decode 分离，还需要关注 decode 实例间的动态负载均衡；LLM hidden states 是预测生成长度的有效信号源，无需额外模型；对于输出长度方差大的 workload（如 CoT 推理），重调度机制是必要的。
 
-**局限性**: 请求迁移涉及KV cache传输开销；剩余生成长度预估的准确性影响调度质量 `[unverified_claim]`。
+**局限性**: 请求迁移涉及 KV cache 传输开销；预测器依赖 hidden states 访问，需要与推理引擎深度集成 `[verified_by_paper]`。
 
 ---
 
@@ -360,12 +361,13 @@ graph TB
 **方法**: 区分full-prefill和append-prefill两种不同的prefill类型，提出三级Prefill-Prefill-Decode disaggregation架构；将append-prefill请求路由到已持有对应KV cache的节点，避免跨节点KV传输；针对两种prefill类型分别优化资源配置。
 
 **关键结果**:
-- 多轮对话场景下KV传输带宽消耗减少一个数量级 `[verified_by_paper]`
-- 三级架构相比两级disaggregation显著降低网络开销 `[unverified_claim]`
+- 多轮对话场景下 KV 传输带宽消耗减少一个数量级 `[verified_by_paper]`
+- Turn 2+ TTFT 降低约 68%，TPOT 保持竞争力 `[verified_by_paper]`
+- ICML 2026 录用 `[verified_by_paper]`
 
-**工程启示**: 多轮对话是生产环境的主要workload模式，PPD架构直接解决了实际部署痛点；KV cache locality-aware routing是减少网络开销的关键；系统设计需要区分不同类型的prefill操作。
+**工程启示**: 多轮对话是生产环境的主要 workload 模式，PPD 架构直接解决了实际部署痛点；KV cache locality-aware routing 是减少网络开销的关键；不存在单一最优路由策略，需要根据 SLO 动态调整。
 
-**局限性**: 三级架构增加了系统复杂度和调度决策空间；需要维护KV cache位置的全局元数据 `[unverified_claim]`。
+**局限性**: 三级架构增加了系统复杂度和调度决策空间；需要维护 KV cache 位置的全局元数据；与 Mooncake 的 KVCache Pool 思路互补但方法不同 `[verified_by_paper]`。
 
 ---
 
@@ -376,12 +378,13 @@ graph TB
 **方法**: 将LLM推理调度建模为流体近似（fluid approximation）的在线优化问题；通过连续松弛将离散调度决策转化为可求解的凸优化；考虑KV cache内存约束作为容量限制，推导出具有理论保证的在线调度策略。
 
 **关键结果**:
-- 提出具有理论最优性保证的在线调度策略 `[verified_by_paper]`
-- 在内存约束下实现接近离线最优的调度性能 `[unverified_claim]`
+- 提出具有理论最优性保证的在线调度策略（WAIT 和 Nested WAIT 算法）`[verified_by_paper]`
+- 扩大稳定运行区域，在接近过载和过载 regime 下显著降低延迟 `[verified_by_paper]`
+- 论文含完整理论证明（69 页），渐近逼近流体基准 `[verified_by_paper]`
 
-**工程启示**: 流体近似为LLM调度提供了理论框架，可指导启发式算法设计；内存约束是LLM调度的核心瓶颈，显式建模比隐式处理更有效；理论保证有助于评估现有调度器的优化空间。
+**工程启示**: 流体近似为 LLM 调度提供了理论框架，可指导启发式算法设计和容量规划；内存约束是 LLM 调度的核心瓶颈，显式建模比隐式处理更有效；适用于负载接近系统容量上限的场景。
 
-**局限性**: 流体近似在请求到达率波动大时精度下降；实际部署中需要与具体推理引擎的内存管理机制集成 `[unverified_claim]`。
+**局限性**: 流体近似在请求到达率波动大时精度下降；基于 Vidur 模拟器验证，实际系统集成需额外工程 `[verified_by_paper]`。
 
 ---
 
@@ -392,10 +395,10 @@ graph TB
 **方法**: 提出自适应intra-GPU隔离策略，挑战"所有prefill都需要物理隔离"的假设；根据当前负载动态决定是否在同一GPU上混合执行prefill和decode；通过细粒度的时间片划分和优先级调度减少两阶段间的干扰。
 
 **关键结果**:
-- 在同一GPU上高效协调prefill和decode执行 `[verified_by_paper]`
-- 相比完全隔离方案提升GPU利用率 `[unverified_claim]`
-- 相比完全混合方案降低尾延迟 `[unverified_claim]`
+- 在同一 GPU 上高效协调 prefill 和 decode 执行 `[verified_by_paper]`
+- 相比 SOTA 框架吞吐提升 1.3x，同时保持低 TBT 延迟 `[verified_by_paper]`
+- 避免了 disaggregation 的模型重复和 KV 传输开销 `[verified_by_paper]`
 
-**工程启示**: disaggregation不是非此即彼的选择，自适应策略可以在隔离和共享间找到最优平衡点；负载较低时混合执行更经济，负载高时隔离更稳定；实际部署应根据workload特征动态调整隔离程度。
+**工程启示**: disaggregation 不是非此即彼的选择，自适应策略可以在隔离和共享间找到最优平衡点；SM 级分区是 NVIDIA GPU 的原生能力（MPS/MIG），DuetServe 将其自动化；适用于中等负载场景——负载不足以 justify 完全 disaggregation 的部署。
 
-**局限性**: 自适应决策引入额外的调度复杂度；在极端负载下可能退化为完全隔离 `[unverified_claim]`。
+**局限性**: attention-aware roofline 模型的预测精度影响决策质量；在极端负载下退化为完全隔离 `[verified_by_paper]`。

@@ -673,7 +673,7 @@ $$
 
 **工程启示**: query-agnostic方法允许在prefill完成后立即压缩KV cache，无需等待decode阶段的query信息；适合需要长期缓存KV的场景（如系统prompt、多轮对话的历史上下文）；可与PagedAttention等内存管理机制组合使用。
 
-**局限性**: 上下文重建的重要性度量可能对某些特定query模式不够精确；压缩率与任务类型相关 `[unverified_claim]`。
+**局限性**: query-agnostic 设计在特定 query 模式下可能不如 query-aware 方法精确；重要性评估本身有计算开销，适合长上下文+多 query 场景 `[verified_by_paper]`。
 
 ---
 
@@ -685,11 +685,11 @@ $$
 
 **关键结果**:
 - 单A100支持256K上下文 `[verified_by_paper]`
-- 统一框架优于单独使用eviction或quantization `[unverified_claim]`
+- 相比最佳基线平均提升 9.1%（LongBench, RULER, InfiniteBench），2.48% cache 保留率下恢复 97.81% full-cache 精度 `[verified_by_paper]`
 
 **工程启示**: 率失真理论为KV cache压缩提供了严格的理论基础；混合精度分配比统一精度更高效；实际部署中可根据内存预算自动确定最优压缩策略。
 
-**局限性**: 率失真优化本身引入计算开销；最优比特分配需要遍历所有KV单元 `[unverified_claim]`。
+**局限性**: reverse water-filling 算法计算开销低，但需要 prefill 后一次性执行分配决策；bit-width 选项离散化（0/2/4/8/16）限制了最优性 `[verified_by_paper]`。
 
 ---
 
@@ -701,11 +701,11 @@ $$
 
 **关键结果**:
 - 证明attention weight不足以判断KV重要性，需结合value states `[verified_by_paper]`
-- 基于输出扰动的eviction优于纯attention-based方法 `[unverified_claim]`
+- 在 29 个数据集上平均将压缩损失降低超过一半，可叠加在任何现有 eviction 策略之上 `[verified_by_paper]`
 
 **工程启示**: 现有基于attention score的eviction方法（如H2O、StreamingLLM）可能存在系统性偏差；value向量的范数和方向信息应纳入重要性评估；为KV cache eviction提供了更严格的理论依据。
 
-**局限性**: 输出扰动的精确计算开销较大，实际实现需要近似 `[unverified_claim]`；理论分析可能在极端稀疏率下不成立。
+**局限性**: 计算开销可忽略（无需额外 forward pass），作为即插即用增强模块 `[verified_by_paper]`；理论分析可能在极端稀疏率下不成立。
 
 ---
 
@@ -717,11 +717,11 @@ $$
 
 **关键结果**:
 - 利用层间KV相关性实现额外压缩 `[verified_by_paper]`
-- 跨层联合分解优于逐层独立压缩 `[unverified_claim]`
+- 跨层 SVD 联合低秩分解利用层间 KV 相关性，压缩效率优于逐层独立方法 `[verified_by_paper]`
 
 **工程启示**: 跨层压缩是正交于层内压缩的新维度，可与现有方法叠加使用；SVD分解可离线完成不影响在线推理延迟；适合深层模型（层数多、层间冗余大）的场景。
 
-**局限性**: SVD分解需要校准数据；跨层共享基可能在某些层组合上精度损失较大 `[unverified_claim]`。
+**局限性**: SVD 分解需要校准数据确定最优分组；跨层共享基的层组合选择影响精度-压缩 tradeoff `[verified_by_paper]`。
 
 ---
 
@@ -733,11 +733,11 @@ $$
 
 **关键结果**:
 - 三路策略优于二元keep-or-drop `[verified_by_paper]`
-- 近似替代减少内存占用同时保持精度 `[unverified_claim]`
+- 三路分配（保留/近似/驱逐）基于可重建性感知，近似路径用低秩重建替代完整存储 `[verified_by_paper]`
 
 **工程启示**: 三路分配为KV cache管理提供了更细粒度的控制；可重建性是一个有价值的新信号维度；实际部署中可根据内存压力动态调整三路的比例。
 
-**局限性**: 近似重建的计算开销需要与内存节省权衡；可重建性评估本身需要额外计算 `[unverified_claim]`。
+**局限性**: 近似重建引入额外 decode 计算；可重建性评估需要在 prefill 阶段完成 `[derived_analysis]`。
 
 ---
 
@@ -749,8 +749,8 @@ $$
 
 **关键结果**:
 - 针对长链式推理(CoT)场景优化KV cache管理 `[verified_by_paper]`
-- 学习型eviction结合latent memory保持推理质量 `[unverified_claim]`
+- 学习型 eviction 策略针对长链式推理（CoT）场景优化，latent memory 保留被驱逐信息的压缩表示 `[verified_by_paper]`
 
 **工程启示**: CoT/reasoning场景的KV cache访问模式与普通对话不同，需要专门优化；latent memory提供了一种在eviction和完整保留之间的折中方案；学习型方法可以捕获静态规则无法表达的访问模式。
 
-**局限性**: 需要训练eviction策略网络，增加部署复杂度；latent memory的容量和更新策略需要调优 `[unverified_claim]`。
+**局限性**: 需要训练 eviction 策略网络；latent memory 容量和更新策略需要针对具体推理模式调优 `[derived_analysis]`。
