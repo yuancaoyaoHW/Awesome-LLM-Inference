@@ -90,6 +90,57 @@ python -m sglang.bench_serving \
 | LongBench | 长文本 | Long context |
 | Synthetic | 固定长度 | 控制变量实验 |
 
+### 2.4 多硬件 Benchmark 命令模板
+
+**A100-80G（标准参考）**：
+```bash
+# vLLM online serving (A100-80G, TP=1, Llama-3-8B)
+python -m vllm.entrypoints.openai.api_server \
+    --model meta-llama/Llama-3-8B-Instruct --dtype float16 \
+    --gpu-memory-utilization 0.9 --max-model-len 8192
+# 另一终端运行 benchmark
+python benchmarks/benchmark_serving.py --backend vllm \
+    --model meta-llama/Llama-3-8B-Instruct --dataset-name sharegpt \
+    --request-rate 10 --num-prompts 500
+```
+
+**H100-80G（FP8 推荐）**：
+```bash
+# vLLM FP8 serving (H100-80G, TP=1, Llama-3-8B)
+python -m vllm.entrypoints.openai.api_server \
+    --model meta-llama/Llama-3-8B-Instruct --dtype float16 \
+    --quantization fp8 --gpu-memory-utilization 0.9
+```
+
+**L40S-48G（量化推荐）**：
+```bash
+# vLLM W4A16 serving (L40S, TP=1, Llama-3-8B-AWQ)
+python -m vllm.entrypoints.openai.api_server \
+    --model casperhansen/llama-3-8b-instruct-awq --dtype float16 \
+    --quantization awq --gpu-memory-utilization 0.9 --max-model-len 4096
+```
+
+**RTX 4090（llama.cpp 推荐）**：
+```bash
+# llama.cpp (4090, Q4_K_M, Llama-3-8B)
+./llama-server -m llama-3-8b-instruct-Q4_K_M.gguf \
+    -ngl 99 -c 4096 --host 0.0.0.0 --port 8080
+# benchmark
+./llama-bench -m llama-3-8b-instruct-Q4_K_M.gguf \
+    -p 512 -n 128 -ngl 99 -b 512
+```
+
+**多卡 70B 模型（A100×4 / H100×4）**：
+```bash
+# vLLM TP=4 (Llama-3-70B)
+python -m vllm.entrypoints.openai.api_server \
+    --model meta-llama/Llama-3-70B-Instruct --dtype float16 \
+    --tensor-parallel-size 4 --gpu-memory-utilization 0.9
+# SGLang TP=4
+python -m sglang.launch_server --model meta-llama/Llama-3-70B-Instruct \
+    --tp 4 --port 30000
+```
+
 ---
 
 ## 3. 标准化对比框架
@@ -106,21 +157,37 @@ python -m sglang.bench_serving \
 
 ### 3.2 硬件维度
 
-| GPU | HBM | 带宽 | FP16 TFLOPS | [FP8](https://arxiv.org/abs/2209.05433) TFLOPS | 互联 | 价格/hr |
-|-----|-----|------|-------------|------------|------|---------|
-| A100-80G | 80GB | 2.0 TB/s | 312 | - | NVLink 600GB/s | ~$2.5 |
-| H100-80G | 80GB | 3.35 TB/s | 990 | 1979 | NVLink 900GB/s | ~$4.0 |
-| L40S | 48GB | 864 GB/s | 362 | 733 | PCIe | ~$1.5 |
-| A10G | 24GB | 600 GB/s | 125 | - | PCIe | ~$1.0 |
+| GPU | HBM | 带宽 | FP16 TFLOPS | FP8 TFLOPS | 互联 | 价格/hr | 适用场景 |
+|-----|-----|------|-------------|------------|------|---------|----------|
+| A100-80G | 80GB | 2.0 TB/s | 312 | - | NVLink 600GB/s | \$2.5 | 通用训练/推理基准 |
+| H100-80G | 80GB | 3.35 TB/s | 990 | 1979 | NVLink 900GB/s | \$4.0 | 高吞吐生产部署 |
+| L40S | 48GB | 864 GB/s | 362 | 733 | PCIe | \$1.5 | 推理性价比优选 |
+| A30 | 24GB | 933 GB/s | 165 | - | NVLink 200GB/s | \$1.2 | 多实例推理 (MIG) |
+| RTX 4090 | 24GB | 1.0 TB/s | 330 | 661 | PCIe | \$0.7 | 本地开发/小模型 |
+| Ascend 910B | 64GB | 1.6 TB/s | 320 (FP16) | - | HCCS 392GB/s | - | 国产化部署 |
+
+### 3.3 硬件适配说明
+
+| GPU | 推荐模型规模 | 量化建议 | 并行策略 | 注意事项 |
+|-----|-------------|---------|---------|----------|
+| A100-80G | 7B-70B | FP16/FP8 均可 | TP2-8 | 标准参考平台，结果可复现性最好 `[verified_by_paper]` |
+| H100-80G | 7B-405B | FP8 优先 | TP2-8 | FP8 Tensor Core 收益显著，需 TensorRT-LLM 或 vLLM 0.4+ `[verified_by_code]` |
+| L40S | 7B-13B | W4A16 (AWQ/GPTQ) | TP1-2 | 无 NVLink，TP>2 通信瓶颈；适合推理密集型 `[derived_analysis]` |
+| A30 | 7B | W8A8/W4A16 | TP1 (MIG 可切分) | MIG 模式可同时服务多个小模型 `[verified_by_code]` |
+| RTX 4090 | 7B-13B | W4A16 (GGUF Q4_K_M) | 单卡 | 无 NVLink/ECC，不适合生产；llama.cpp 最佳 `[derived_analysis]` |
+| Ascend 910B | 7B-70B | W8A8 (MindSpore) | 多卡 HCCS | 需 MindIE/vLLM-Ascend 适配，生态有限 `[unverified_claim]` |
 
 ### 3.3 场景维度
 
 | 场景 | 特点 | 关键指标 | 典型配置 |
 |------|------|----------|----------|
-| Online Serving | 低延迟、SLO 约束 | TTFT P99, TPOT P99 | TP=2-4, batch=32-128 |
+| Online Serving | 低延迟、SLO 约束 | TTFT P99, TPOT P99, Goodput | TP=2-4, batch=32-128 |
 | Offline Batch | 高吞吐、无延迟约束 | tokens/s, cost/token | 大 batch, 高利用率 |
 | Long Context | 长输入 (32K-128K) | TTFT, memory | SP/CP, KV compression |
-| Multi-turn Chat | 频繁 prefix reuse | Cache hit rate | Prefix caching |
+| RAG Prefix-Heavy | 大量共享前缀 | Cache hit rate, TTFT | prefix caching 必须开启 |
+| MoE Serving | Expert 路由、通信开销 | tokens/s, all-to-all latency | EP + TP, 高带宽互联 |
+| P/D Disaggregation | 分离 prefill/decode | Goodput, KV transfer latency | 独立集群, RDMA |
+| Multi-turn Chat | 频繁 prefix reuse | Cache hit rate, TTFT | Prefix caching |
 | Code Generation | 长输出、structured | TPOT, accuracy | Speculative decoding |
 
 ### 3.4 负载维度

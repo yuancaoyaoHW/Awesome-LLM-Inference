@@ -4,6 +4,10 @@
 
 本文档为仓库中的关键论文和系统提供工程复现路线图，按难度分级，标注所需资源和预期时间。
 
+**证据等级说明**：
+- `[verified_by_code]` — 开源代码可直接运行复现
+- `[derived_analysis]` — 基于文档和经验推导的时间/资源估计
+
 ---
 
 ## 1. 复现难度分级
@@ -95,6 +99,72 @@ pip install torch==2.1.0 --index-url https://download.pytorch.org/whl/cu121
 pip install transformers accelerate datasets
 pip install triton==2.1.0
 pip install flash-attn==2.5.0
+```
+
+### 3.2 Step-by-Step: vLLM Throughput Benchmark 复现
+
+```bash
+# Step 1: 安装 vLLM
+pip install vllm>=0.4.0
+
+# Step 2: 下载测试数据集
+wget -O ShareGPT_V3.json \
+  "https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json"
+
+# Step 3: 锁定 GPU 频率（减少波动）
+sudo nvidia-smi -lgc 1410,1410  # A100
+# sudo nvidia-smi -lgc 1980,1980  # H100
+
+# Step 4: 运行 offline throughput benchmark
+python -m vllm.entrypoints.openai.api_server \
+    --model meta-llama/Llama-3-8B-Instruct \
+    --dtype float16 --gpu-memory-utilization 0.9 &
+sleep 30  # 等待模型加载
+
+python benchmarks/benchmark_serving.py \
+    --backend openai --base-url http://localhost:8000 \
+    --model meta-llama/Llama-3-8B-Instruct \
+    --dataset-name sharegpt --dataset-path ShareGPT_V3.json \
+    --num-prompts 500 --request-rate inf
+
+# Step 5: 预期结果范围 (A100-80G, Llama-3-8B, FP16)
+# - Throughput: 4000-6000 tokens/s
+# - TTFT P50: 20-40ms, P99: 60-120ms
+# - TPOT P50: 12-18ms
+
+# Troubleshooting:
+# - OOM: 降低 --gpu-memory-utilization 到 0.85
+# - 性能低于预期: 检查 GPU 频率是否锁定，检查 PCIe 带宽
+# - CUDA error: 确认 CUDA 版本与 vLLM 兼容
+```
+
+### 3.3 Step-by-Step: FlashAttention Triton 实现复现
+
+```bash
+# Step 1: 安装依赖
+pip install triton==2.1.0 torch==2.1.0
+
+# Step 2: 实现简化版 (参考 triton tutorials)
+# 核心文件: flash_attention_triton.py
+# 关键参数: BLOCK_M=128, BLOCK_N=64, num_warps=4
+
+# Step 3: 验证正确性
+python -c "
+import torch
+from flash_attention_triton import flash_attention
+q = torch.randn(1, 32, 2048, 128, device='cuda', dtype=torch.float16)
+k = torch.randn(1, 32, 2048, 128, device='cuda', dtype=torch.float16)
+v = torch.randn(1, 32, 2048, 128, device='cuda', dtype=torch.float16)
+out_triton = flash_attention(q, k, v)
+out_ref = torch.nn.functional.scaled_dot_product_attention(q, k, v)
+print(f'Max diff: {(out_triton - out_ref).abs().max().item():.6f}')
+# 预期: Max diff < 1e-2 (FP16 精度)
+"
+
+# Step 4: Benchmark
+# 预期 (A100, seq_len=2048, d=128, FP16):
+# - Triton 实现: ~150 TFLOPS (约 50% peak)
+# - flash-attn 库: ~220 TFLOPS (约 70% peak)
 ```
 
 ### 3.2 Serving 框架

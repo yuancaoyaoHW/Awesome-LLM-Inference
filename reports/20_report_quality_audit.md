@@ -35,7 +35,7 @@
 
 | 类别 | 数量 | 示例 |
 |------|------|------|
-| 自动链接污染 | 8 处 | `[KV Cache Compress](...)ion` → `[KV Cache Compression](...)` |
+| 自动链接污染 | 8 处 | `[KV Cache Compress](...) + ion` → `[KV Cache Compression](...)` |
 | 术语不一致 | ~50 处 | "KV Cache" vs "KV cache"、"Continuous Batching" vs "continuous batching" |
 | 缺失证据标注 | 全部技术报告 | 所有关键结论现已标注 evidence_grade |
 | 缺失系统条目 | 2 个 | llm-d、NVIDIA Dynamo 未有完整分析 |

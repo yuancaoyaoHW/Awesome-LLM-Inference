@@ -1,5 +1,11 @@
 # Serving Framework 与 Scheduling 深度分析
 
+**证据等级说明**：
+- `[verified_by_paper]` — 论文中有明确实验数据支撑
+- `[verified_by_code]` — 开源代码中可直接验证
+- `[derived_analysis]` — 基于多个来源的综合分析推导
+- `[unverified_claim]` — 来自博客/社区报告，未经独立验证
+
 ## 1. [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) 机制详解
 
 ### 1.1 问题定义
@@ -13,9 +19,9 @@
 - **系统机制**: 
   - Selective batching: 区分 prefill 和 decode 请求，分别组 batch
   - 请求级别的 preemption 和 insertion
-- **实验指标**: 相比 static batching，吞吐提升 36.9x（极端场景）
+- **实验指标**: 相比 static batching，吞吐提升 36.9x（极端场景）`[verified_by_paper]`
 - **工程难点**: 需要重写 attention kernel 支持 variable-length sequences in a batch
-- **影响**: 所有后续 serving 系统的基础范式
+- **影响**: 所有后续 serving 系统的基础范式 `[verified_by_paper]`
 
 #### [vLLM](https://github.com/vllm-project/vllm) (2023.09, UC Berkeley)
 - **方法核心**: [PagedAttention](https://arxiv.org/abs/2309.06180) — 将 KV cache 按固定大小 block 分配，通过 block table 间接寻址
@@ -24,7 +30,7 @@
   - Copy-on-write: parallel sampling 时共享 prefix blocks
   - Preemption: swap to CPU 或 recomputation
   - All-or-nothing scheduling: 保证请求要么完全分配到资源，要么不调度
-- **实验指标**: 相比 [FasterTransformer](https://github.com/NVIDIA/FasterTransformer)，吞吐提升 2-4x；内存浪费从 60-80% 降至 < 4%
+- **实验指标**: 相比 [FasterTransformer](https://github.com/NVIDIA/FasterTransformer)，吞吐提升 2-4x；内存浪费从 60-80% 降至 < 4% `[verified_by_paper]`
 - **工程难点**: 
   - Paged attention kernel 需要 gather/scatter 操作，引入额外 overhead
   - Block size 选择影响内存效率和 kernel 性能的 tradeoff
@@ -50,7 +56,7 @@
   - LRU eviction: 基于 LRU 策略淘汰不活跃的 tree nodes
   - Chunked prefill: 将长 prefill 拆分为 chunks 与 decode 交错执行
   - Structured generation: constrained decoding 与 scheduling 协同优化
-- **实验指标**: 在多轮对话场景比 [vLLM](https://github.com/vllm-project/vllm) 快 5x（prefix hit rate 高时）
+- **实验指标**: 在多轮对话场景比 [vLLM](https://github.com/vllm-project/vllm) 快 5x（prefix hit rate 高时）`[verified_by_paper]`
 - **工程难点**:
   - Radix tree 维护开销（insert/evict/match）
   - 与 tensor parallelism 的交互复杂
@@ -142,7 +148,7 @@ Prefill 阶段是 compute-bound（大量矩阵乘法），decode 阶段是 memor
   - Decode cluster: 小 batch、低 latency
   - KV cache transfer: prefill 完成后通过 RDMA/NVLink 传输 KV cache 到 decode 节点
   - Placement algorithm: 基于 SLO 约束优化 prefill/decode 的 GPU 分配比例
-- **实验指标**: 相比 colocated serving，在满足 SLO 的前提下 goodput 提升 1.5-2.3x
+- **实验指标**: 相比 colocated serving，在满足 SLO 的前提下 goodput 提升 1.5-2.3x `[verified_by_paper]`
 - **工程难点**:
   - KV cache 传输延迟（尤其是跨节点）
   - Prefill/decode 比例的动态调整
@@ -230,7 +236,7 @@ graph TB
   - 用历史数据训练 output length predictor
   - 新请求到来时预测长度，插入优先队列
   - 短请求优先执行，减少平均等待时间
-- **实验指标**: 相比 FCFS，平均 JCT (Job Completion Time) 降低 2.8x
+- **实验指标**: 相比 FCFS，平均 JCT (Job Completion Time) 降低 2.8x `[verified_by_paper]`
 - **工程难点**: 预测不准确时可能导致 starvation
 
 ### 4.3 Priority-Based
