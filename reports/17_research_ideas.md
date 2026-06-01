@@ -590,10 +590,135 @@
 
 ## 最新进展 (2025-2026)
 
-- [**EAGLE-3.1**](https://github.com/SafeAILab/EAGLE) (SafeAI Lab, 2026): 修复EAGLE-3的attention drift问题，FC normalization + post-norm设计，长上下文鲁棒性显著提升
-- [**Speculative Speculative Decoding (Saguaro)**](https://arxiv.org/abs/2603.03251) (2026): 二级speculation架构，比现有最优speculative decoding快2x，验证了多级speculation的可行性
-- [**Learning To Draft**](https://arxiv.org/abs/2603.01639) (2026): 强化学习自适应draft深度和tree大小，验证了选题16(Batch-Aware Speculative Decoding)的研究方向
-- [**RDKV**](https://arxiv.org/abs/2605.08317) (2026): 率失真优化统一eviction和quantization，验证了选题15(Token-Aware自适应精度)的研究方向
-- [**PPD Disaggregation**](https://arxiv.org/abs/2603.13358) (2026): 多轮对话的三级disaggregation，验证了选题23(动态负载均衡)和选题30(KV cache迁移)的研究方向
-- [**LittleBit**](https://arxiv.org/abs/2506.13771) (NeurIPS 2025): 0.1 BPW超低比特量化，低秩latent分解+二值化，验证了选题13(W4A4可行性)的极限探索方向
-- [**DuetServe**](https://arxiv.org/abs/2511.04791) (2025): 自适应intra-GPU P/D协调，为选题23(动态负载均衡)提供了新的设计空间
+### [EAGLE-3.1](https://github.com/SafeAILab/EAGLE) (SafeAI Lab, 2026)
+
+**问题**: EAGLE-3在长上下文生成时存在attention drift问题，导致draft质量随生成长度增加而下降。
+
+**方法**: 引入FC normalization和post-norm设计，稳定长序列生成过程中draft model的attention分布，修复EAGLE-3的attention drift问题。
+
+**关键结果**:
+- 修复EAGLE-3的attention drift问题 `[verified_by_code]`
+- FC normalization + post-norm设计 `[verified_by_code]`
+- 长上下文鲁棒性显著提升 `[verified_by_code]`
+
+**工程启示**: Draft model的长上下文稳定性是实际部署的关键问题；normalization设计对speculative decoding的鲁棒性至关重要。
+
+**局限性**: 仅修复了EAGLE-3的特定问题；是否适用于其他draft架构未验证。
+
+**验证/开启的研究方向**: 验证了选题18（Tree Decoding最优树结构搜索）中draft质量对tree效率的影响；开启了"draft model长上下文稳定性"这一新研究子方向。
+
+---
+
+### [Speculative Speculative Decoding (Saguaro)](https://arxiv.org/abs/2603.03251) (ICLR 2026)
+
+**问题**: 标准speculative decoding中draft和verify严格串行——draft model在verify期间完全空闲，计算资源浪费。
+
+**方法**: 二级speculation：在target model验证当前draft时，draft model预测验证结果并预先准备下一轮speculation。如果预测匹配实际验证结果，下一轮draft可立即返回，消除drafting开销。
+
+**关键结果**:
+- 相比优化的speculative decoding基线平均快约30% `[verified_by_paper]`
+- 相比标准autoregressive decoding最高5x加速 `[verified_by_paper]`
+- 比SGLang最优baseline快2x `[verified_by_paper]`
+- ICLR 2026录用 `[verified_by_paper]`
+
+**工程启示**: 二级speculation利用了draft model在verify期间的空闲计算资源；与现有speculative decoding方法正交，可叠加使用。
+
+**局限性**: 预测验证结果的准确率决定额外加速上限；适用于draft model有独立计算资源的场景。
+
+**验证/开启的研究方向**: 验证了多级speculation的可行性，开启了"speculation的speculation"这一新范式；为选题47（Disaggregated Serving + Speculative Decoding）提供了新的设计空间——disaggregated架构天然支持draft-verify overlap。
+
+---
+
+### [Learning To Draft](https://arxiv.org/abs/2603.01639) (2026)
+
+**问题**: 现有speculative decoding使用固定draft长度和tree结构，但最优配置随任务、上下文、生成位置动态变化。
+
+**方法**: 将speculative decoding建模为强化学习环境，训练两个协同自适应策略动态调整draft深度和tree大小，直接优化每个draft-verify cycle的wall-clock throughput（而非代理指标如acceptance length）。
+
+**关键结果**:
+- 加速比2.24x-4.32x（跨5个LLM、4个任务） `[verified_by_paper]`
+- 相比EAGLE-3最高额外提升36.4% `[verified_by_paper]`
+- DeepSeek-R1上额外加速10% `[unverified_claim]`
+
+**工程启示**: RL自适应策略可发现人工难以设计的最优draft配置；直接优化throughput比优化acceptance length更有效。
+
+**局限性**: 策略网络需要训练；RL训练的稳定性和泛化性需要验证。
+
+**验证/开启的研究方向**: 直接验证了选题16（Batch-Aware Speculative Decoding）的研究方向——自适应draft配置确实优于固定配置；为选题18（Tree Decoding最优树结构搜索）提供了RL-based的解决方案。
+
+---
+
+### [RDKV](https://arxiv.org/abs/2605.08317) (2026)
+
+**问题**: 现有KV cache压缩方法将eviction（丢弃token）和quantization（降低精度）视为独立技术，未在统一框架下联合优化。
+
+**方法**: 将KV cache压缩建模为率失真（rate-distortion）优化问题，使用reverse water-filling算法为每个单元分配最优bit-width（从0到16 bit）。0 bit = eviction，16 bit = full retention，中间为量化。
+
+**关键结果**:
+- 相比最佳基线平均提升9.1%（LongBench, RULER, InfiniteBench） `[verified_by_paper]`
+- 仅2.48% cache保留率下恢复97.81%的full-cache精度 `[verified_by_paper]`
+- 128K上下文：4.5x decode加速，1.9x峰值内存降低 `[verified_by_paper]`
+
+**工程启示**: 统一eviction和quantization的视角为KV cache压缩提供了理论最优基准；reverse water-filling算法计算开销低，适合在线部署。
+
+**局限性**: 需要估计每个token/channel的失真贡献；bit-width选项离散化可能损失最优性。
+
+**验证/开启的研究方向**: 直接验证了选题15（KV cache Token-Aware自适应精度）的研究方向——不同token确实需要不同bit-width；为选题7（KV cache Learned Compression）提供了理论基础——率失真框架可指导learned codec的设计。
+
+---
+
+### [PPD Disaggregation](https://arxiv.org/abs/2603.13358) (ICML 2026)
+
+**问题**: 标准P/D disaggregation在多轮对话场景下效率低下，每轮新输入都被当作full prefill发送到prefill节点。
+
+**方法**: 区分full-prefill和append-prefill，引入三级节点角色（Prefill/Prefill-capable Decode/纯Decode），Turn 2+请求可在decode节点本地执行append-prefill。
+
+**关键结果**:
+- Turn 2+ TTFT降低约68% `[verified_by_paper]`
+- 高负载下缓解KV传输拥塞 `[verified_by_paper]`
+- ICML 2026录用 `[verified_by_paper]`
+
+**工程启示**: 多轮对话场景下静态P/D路由策略次优；三级架构为动态负载均衡提供了新的设计空间。
+
+**局限性**: 三级架构增加系统复杂度；路由策略需要根据SLO动态调整。
+
+**验证/开启的研究方向**: 直接验证了选题23（P/D disaggregation动态负载均衡）的研究方向——静态分配确实次优；验证了选题30（Auto-Scaling + KV cache迁移）——PPD通过让KV留在decode节点避免了迁移问题。
+
+---
+
+### [LittleBit](https://arxiv.org/abs/2506.13771) (NeurIPS 2025)
+
+**问题**: 现有量化方法在1 bit以下（sub-1-bit）精度下性能急剧下降，需要在极低比特率下仍保持合理精度的压缩框架。
+
+**方法**: 低秩潜在矩阵分解将权重分解为小因子矩阵，对因子进行二值化（+1/-1），多尺度补偿机制学习行、列、潜在维度的重要性参数。Dual Sign-Value-Independent Decomposition为QAT提供初始化。
+
+**关键结果**:
+- 0.1 BPW下超越0.7 BPW的领先方法（Llama2-7B） `[verified_by_paper]`
+- Llama2-13B压缩至<0.9GB（约31x压缩） `[verified_by_paper]`
+- 潜在推理加速11.6x `[verified_by_paper]`
+- NeurIPS 2025录用 `[verified_by_paper]`
+
+**工程启示**: 0.1 BPW意味着70B模型可压缩至~2.3GB，适合边缘设备；二值矩阵乘法的硬件加速潜力巨大。
+
+**局限性**: 精度损失在某些任务上仍然显著；需要QAT训练。
+
+**验证/开启的研究方向**: 验证了选题13（W4A4全INT4推理可行性）的极限探索方向——sub-1-bit压缩已经可行；开启了"低秩分解+二值化"的超低比特压缩新范式，为选题45（Tensor Core非标准数据格式）提供了新的计算模式。
+
+---
+
+### [DuetServe](https://arxiv.org/abs/2511.04791) (2025)
+
+**问题**: 完全物理隔离的P/D disaggregation浪费资源，但简单聚合执行会导致prefill干扰decode延迟。
+
+**方法**: 默认聚合模式运行，仅在检测到干扰威胁SLO时激活SM级空间分区。Attention-aware roofline模型预测延迟，分区优化器选择最优SM划分。
+
+**关键结果**:
+- 相比SOTA框架吞吐提升1.3x `[verified_by_paper]`
+- 保持低生成延迟（TBT满足SLO） `[verified_by_paper]`
+- 避免disaggregation的模型重复和KV传输开销 `[verified_by_paper]`
+
+**工程启示**: P/D disaggregation并非所有场景最优解；SM级分区是NVIDIA GPU原生能力，可自动化使用。
+
+**局限性**: 仅适用于单GPU内协调；高负载场景仍需物理disaggregation。
+
+**验证/开启的研究方向**: 为选题23（动态负载均衡）提供了新的设计空间——不仅可以在节点间均衡，还可以在单GPU内通过SM分区实现细粒度协调；验证了"按需隔离"优于"始终隔离"的设计原则。

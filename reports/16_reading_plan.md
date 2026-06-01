@@ -326,9 +326,133 @@ graph TD
 
 ## 最新进展 (2025-2026)
 
-- [**EAGLE-3**](https://arxiv.org/abs/2503.01840) (Peking University, 2025): Speculative decoding新SOTA，Training-Time Test架构，已成为工业标准draft方法
-- [**FlatQuant**](https://arxiv.org/abs/2410.09426) (ICML 2025): W4A4KV4量化SOTA，Kronecker仿射变换+融合kernel，量化方向必读
-- [**KVzip**](https://arxiv.org/abs/2505.23416) (NeurIPS 2025): Query-agnostic KV cache压缩，通过上下文重建评估重要性，KV cache方向必读
-- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, GTC 2025): 数据中心级推理框架，P/D disaggregation已成为生产标准，系统方向必读
-- [**Quartet**](https://arxiv.org/abs/2505.14669) (NeurIPS 2025): 原生FP4训练，揭示低精度scaling law，硬件-算法协同设计方向必读
-- [**Efficient Attention Mechanisms Survey**](https://arxiv.org/abs/2507.19595) (2025): 全面综述linear/sparse/hybrid attention，适合快速了解attention优化全景
+### [EAGLE-3](https://arxiv.org/abs/2503.01840) (Peking University, 2025)
+
+**问题**: EAGLE/EAGLE-2的feature prediction范式存在天花板，扩大训练数据带来的收益有限。
+
+**方法**: 放弃feature prediction转为直接token prediction，用多层特征融合（Training-Time Test技术）替代仅依赖顶层特征，从target model多个层提取信息。
+
+**关键结果**:
+- 最高6.5x加速，LLaMA-3.3-70B达4.79x `[verified_by_paper]`
+- SGLang框架中batch size 64下吞吐提升1.38x `[verified_by_paper]`
+- 已成为工业标准draft方法 `[verified_by_paper]`
+
+**工程启示**: 代表speculative decoding draft model设计的范式转变；已在SGLang等生产框架中集成，部署成熟度高。
+
+**局限性**: 需要训练专用draft model；多层特征提取增加与target model的耦合度。
+
+**阅读优先级**: 必读（路线C阶段2）
+**前置要求**: Speculative Decoding基础、EAGLE/EAGLE-2
+**适合读者**: 算法研究者、系统工程师
+**建议阅读时间**: 精读2小时，含EAGLE-1/2对比分析
+
+---
+
+### [FlatQuant](https://arxiv.org/abs/2410.09426) (ICML 2025)
+
+**问题**: LLM量化受outlier影响严重，W4A4等激进量化设置下精度损失显著。
+
+**方法**: 为每个线性层学习Kronecker结构仿射变换，最大化量化前分布的"平坦度"，所有操作融合为单个kernel。Post-training方法，仅需几小时校准。
+
+**关键结果**:
+- LLaMA-3-70B W4A4精度损失<1%，超越SpinQuant 7.5% `[verified_by_paper]`
+- Prefill加速最高2.3x，Decode加速最高1.7x `[verified_by_paper]`
+- ICML 2025录用 `[verified_by_paper]`
+
+**工程启示**: W4A4KV4的SOTA方案；Kronecker分解思路可推广；校准成本低，适合快速部署。
+
+**局限性**: 可学习变换增加部署复杂度；需要per-layer校准。
+
+**阅读优先级**: 必读（路线C阶段3）
+**前置要求**: GPTQ/AWQ基础、SmoothQuant/SpinQuant了解
+**适合读者**: 量化方向研究者、部署工程师
+**建议阅读时间**: 精读1.5小时，重点关注Kronecker分解和kernel融合设计
+
+---
+
+### [KVzip](https://arxiv.org/abs/2505.23416) (NeurIPS 2025 Oral)
+
+**问题**: 现有KV cache eviction方法是query-aware的，每个新query都需要重新压缩cache，在多query共享长上下文场景中效率极低。
+
+**方法**: Query-agnostic重要性评估——利用LLM自身评估KV对的上下文重建能力，压缩一次即可服务多个不同query。
+
+**关键结果**:
+- 3-4x KV cache大小缩减 `[verified_by_paper]`
+- FlashAttention decode延迟降低约2x `[verified_by_paper]`
+- 支持LLaMA3.1/Qwen2.5/Gemma3，上下文达170K tokens `[verified_by_paper]`
+- NeurIPS 2025 Oral `[verified_by_paper]`
+
+**工程启示**: 多query共享上下文场景（RAG、agent）的首选方案；压缩一次、服务多次的特性大幅降低计算开销。
+
+**局限性**: 重要性评估本身有计算开销；适合长上下文+多query场景。
+
+**阅读优先级**: 必读（路线C阶段3）
+**前置要求**: H2O/SnapKV等KV eviction基础
+**适合读者**: KV cache方向研究者、长上下文部署工程师
+**建议阅读时间**: 精读1.5小时，重点关注query-agnostic评估机制
+
+---
+
+### [NVIDIA Dynamo](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, GTC 2025)
+
+**问题**: 大规模LLM推理部署缺乏统一的数据中心级编排层，P/D disaggregation需要从零构建。
+
+**方法**: 数据中心级推理编排框架，原生支持P/D disaggregation、GPU autoscaling、prefix-aware routing，支持多种推理引擎作为backend。
+
+**关键结果**:
+- 原生P/D disaggregation和多节点EP支持 `[verified_by_code]`
+- GPU-level autoscaling `[verified_by_code]`
+- 支持vLLM/TRT-LLM/SGLang作为backend `[verified_by_code]`
+
+**工程启示**: P/D disaggregation已成为生产标准；代表了从"单机引擎优化"到"集群级编排"的演进。
+
+**局限性**: 面向大规模集群；需要高带宽互联。
+
+**阅读优先级**: 必读（路线A阶段3、路线F阶段3）
+**前置要求**: DistServe/Mooncake的P/D disaggregation概念
+**适合读者**: 系统工程师、基础设施架构师
+**建议阅读时间**: 快速浏览1小时（博客+文档），重点关注架构设计和部署模式
+
+---
+
+### [Quartet](https://arxiv.org/abs/2505.14669) (NeurIPS 2025)
+
+**问题**: Blackwell架构提供原生FP4硬件支持，需要验证FP4训练可行性并建立低精度scaling law。
+
+**方法**: 端到端FP4训练，所有线性层在FP4精度下执行，针对Blackwell架构优化CUDA kernel。揭示低精度scaling law。
+
+**关键结果**:
+- FP4训练是FP16/FP8训练的竞争性替代方案 `[verified_by_paper]`
+- 提升吞吐量和能效 `[verified_by_paper]`
+- NeurIPS 2025录用 `[verified_by_paper]`
+
+**工程启示**: Blackwell GPU用户应考虑FP4训练；low-precision scaling law可指导训练预算分配。
+
+**局限性**: 依赖Blackwell硬件；可能需要更多数据/步数匹配FP16精度。
+
+**阅读优先级**: 必读（路线B阶段3、路线C阶段3）
+**前置要求**: FP8训练基础、Transformer Engine了解
+**适合读者**: 硬件-算法协同设计研究者、训练基础设施工程师
+**建议阅读时间**: 精读2小时，重点关注scaling law分析和FP4 kernel设计
+
+---
+
+### [Efficient Attention Mechanisms Survey](https://arxiv.org/abs/2507.19595) (2025)
+
+**问题**: 高效attention机制（linear/sparse/hybrid）研究快速发展，缺乏系统性分类和性能对比综述。
+
+**方法**: 系统分类linear attention、sparse attention、hybrid attention方法，提供统一性能对比框架，分析各方法在不同序列长度和硬件配置下的适用性。
+
+**关键结果**:
+- 系统分类linear/sparse/hybrid attention方法 `[verified_by_paper]`
+- 提供统一性能对比框架 `[verified_by_paper]`
+- 分析各方法的适用场景和tradeoff `[verified_by_paper]`
+
+**工程启示**: 适合快速了解attention优化全景；提供方法选择的决策框架。
+
+**局限性**: 综述性质，不包含新方法；部分对比数据来自原始论文。
+
+**阅读优先级**: 推荐（所有路线的入门参考）
+**前置要求**: FlashAttention基础
+**适合读者**: 所有背景的读者，特别适合快速建立全景认知
+**建议阅读时间**: 快速浏览1小时（重点看分类图和对比表），按需深读具体方法

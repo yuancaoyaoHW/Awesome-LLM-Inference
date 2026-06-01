@@ -471,9 +471,115 @@ graph TD
 
 ## 最新进展 (2025-2026)
 
-- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, 2025): 数据中心级推理框架，原生支持 P/D disaggregation、多节点 EP 和智能路由调度
-- [**llm-d**](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025): Kubernetes 原生的分布式推理框架，支持 disaggregated serving、prefix-cache-aware routing 和 MoE wide-EP
-- [**vLLM V1**](https://blog.vllm.ai/2025/01/27/v1-alpha-release.html) (vLLM Project/PyTorch Foundation, 2025): 架构重构，插件化模型和硬件后端，加入 PyTorch Foundation 治理
-- [**SGLang v0.4**](https://github.com/sgl-project/sglang) (SGLang Team, 2025): 支持确定性 batch-invariant kernel、DeepSeek-R1 推理优化，服务 300K+ GPU
-- [**SpecForge**](https://arxiv.org/abs/2603.18567) (2026): 开源生产级 speculative decoding 训练框架，完整支持 EAGLE-3，Qwen3-235B 训练加速 9.9x
-- [**PPD (Prefill-Prefill-Decode)**](https://arxiv.org/abs/2603.13358) (2026): 针对多轮对话的 disaggregation 优化，区分 full-prefill 和 append-prefill，减少 KV 传输开销
+### [NVIDIA Dynamo](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, 2025)
+
+**问题**: 大规模LLM推理部署缺乏统一的数据中心级编排层，各推理引擎（vLLM/SGLang/TRT-LLM）独立运行，无法实现跨节点P/D disaggregation和智能路由。
+
+**方法**: 提供数据中心级推理编排框架，原生支持P/D disaggregation、GPU autoscaling（基于queue depth和SLO violation rate）、prefix-aware request routing。设计为上层编排层，支持vLLM/TensorRT-LLM/SGLang作为worker backend。
+
+**关键结果**:
+- 原生P/D disaggregation和多节点Expert Parallelism支持 `[verified_by_code]`
+- GPU-level autoscaling与Kubernetes深度集成 `[verified_by_code]`
+- 支持多种推理引擎作为backend `[verified_by_code]`
+
+**工程启示**: 代表了LLM推理从"单机引擎优化"到"集群级编排"的演进；P/D disaggregation已成为生产标准架构模式。
+
+**局限性**: 面向100+ GPU大规模集群，小规模部署overhead不划算；需要高带宽互联（InfiniBand/RoCE）。
+
+**架构借鉴关系**: 整合vLLM/TensorRT-LLM作为底层worker；P/D disaggregation思想来自DistServe/Mooncake；路由策略受llm-d和SGLang prefix-aware scheduling影响。
+
+---
+
+### [llm-d](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025)
+
+**问题**: 云原生环境下LLM推理缺乏与Kubernetes生态深度集成的方案，现有框架需要大量手动配置才能实现弹性伸缩和prefix-cache-aware routing。
+
+**方法**: 基于K8s Gateway API构建分布式推理框架，核心创新是prefix-cache-aware routing——请求路由考虑各worker的prefix cache状态（基于radix tree匹配），最大化KV cache复用。支持P/D disaggregation和Wide Expert Parallelism。
+
+**关键结果**:
+- Kubernetes原生pod scheduling，支持P/D disaggregation `[verified_by_code]`
+- Prefix-cache-aware load balancer，基于radix tree匹配 `[verified_by_code]`
+- 跨pod KV cache sharing `[verified_by_code]`
+
+**工程启示**: 多租户云环境的首选方案；将SGLang的RadixAttention思想提升到集群路由层面；需要Kubernetes 1.29+和Gateway API v1。
+
+**局限性**: 非K8s环境不适用；RDMA-capable CNI推荐用于KV transfer；MoE Wide-EP支持尚未完全验证。
+
+**架构借鉴关系**: Worker层使用vLLM引擎；prefix-aware routing受SGLang RadixAttention启发；disaggregated架构参考DistServe/Mooncake设计。
+
+---
+
+### [vLLM V1](https://blog.vllm.ai/2025/01/27/v1-alpha-release.html) (vLLM Project/PyTorch Foundation, 2025)
+
+**问题**: vLLM V0架构的单线程scheduler成为高QPS场景瓶颈，模型和硬件后端耦合度高，难以支持快速迭代的新模型和新硬件。
+
+**方法**: 架构重构为插件化设计——模型后端、硬件后端、调度策略均可独立替换。引入SchedulerOutput抽象解耦调度决策和执行，加入PyTorch Foundation治理确保社区可持续发展。
+
+**关键结果**:
+- 插件化架构，模型/硬件后端可替换 `[verified_by_code]`
+- 加入PyTorch Foundation治理 `[verified_by_code]`
+- V1解决了V0的scheduler单线程瓶颈 `[verified_by_code]`
+
+**工程启示**: 代表了LLM推理框架从"快速原型"到"可持续工程"的成熟化；插件化设计降低了社区贡献门槛。
+
+**局限性**: V1迁移期间部分功能暂不可用；插件化带来的抽象层可能有微小性能开销。
+
+**架构借鉴关系**: 核心PagedAttention设计不变；V1的插件化思想参考了TensorRT-LLM的模块化设计；调度改进受SGLang的chunked prefill实践影响。
+
+---
+
+### [SGLang v0.4](https://github.com/sgl-project/sglang) (SGLang Team, 2025)
+
+**问题**: 大规模reasoning模型（如DeepSeek-R1）的长输出序列和确定性要求对推理框架提出新挑战——需要batch-invariant确定性输出和高效长序列decode。
+
+**方法**: 引入确定性batch-invariant kernel确保相同输入在不同batch组成下产生相同输出；针对DeepSeek-R1等reasoning模型优化长输出decode路径；服务规模扩展到300K+ GPU。
+
+**关键结果**:
+- 确定性batch-invariant kernel支持 `[verified_by_code]`
+- DeepSeek-R1推理优化 `[verified_by_code]`
+- 服务300K+ GPU规模 `[unverified_claim]`
+
+**工程启示**: Reasoning模型的确定性需求推动了kernel层面的设计变化；SGLang从学术项目成长为生产级基础设施。
+
+**局限性**: 确定性kernel可能有微小性能开销；300K+ GPU规模的具体部署细节未公开。
+
+**架构借鉴关系**: 继承RadixAttention核心设计；FlashInfer作为kernel backend持续演进；chunked prefill实践反哺vLLM。
+
+---
+
+### [SpecForge](https://arxiv.org/abs/2603.18567) (2026)
+
+**问题**: Speculative decoding的实际部署面临两大障碍：缺乏高质量开源draft model；大规模draft model训练缺乏可扩展基础设施（如Qwen3-235B的EAGLE-3训练效率极低）。
+
+**方法**: Target-draft解耦训练（避免target model全量前向传播）、混合并行（DP+TP+PP）扩展训练、优化训练kernel提升效率。与SGLang生产推理引擎集成，发布SpecBundle（预训练的生产级EAGLE-3 draft model集合）。
+
+**关键结果**:
+- Qwen3-235B-A22B的EAGLE-3训练加速9.9x `[verified_by_paper]`
+- Draft model端到端推理加速最高4.48x（SGLang上） `[verified_by_paper]`
+- 发布SpecBundle：主流开源LLM的生产级draft model集合 `[verified_by_paper]`
+
+**工程启示**: 解决了speculative decoding从研究到生产的最后一公里问题；SpecBundle降低了部署门槛（无需自行训练draft model）。
+
+**局限性**: 训练框架与EAGLE-3架构绑定；SpecBundle覆盖的模型范围有限。
+
+**架构借鉴关系**: 为EAGLE-3提供训练基础设施；与SGLang推理框架深度集成；训练并行策略参考Megatron-LM。
+
+---
+
+### [PPD (Prefill-Prefill-Decode)](https://arxiv.org/abs/2603.13358) (ICML 2026)
+
+**问题**: 标准P/D disaggregation在多轮对话场景下效率低下——每轮新输入都被当作full prefill发送到prefill节点，导致重复传输已缓存的KV states，网络带宽被KV传输饱和。
+
+**方法**: 区分full-prefill（首轮，无缓存KV）和append-prefill（后续轮次，复用缓存KV），引入三级节点角色：Prefill节点、Prefill-capable Decode节点、纯Decode节点。Turn 2+请求可在decode节点本地执行append-prefill，避免KV传输。
+
+**关键结果**:
+- Turn 2+ TTFT降低约68% `[verified_by_paper]`
+- TPOT保持竞争力 `[verified_by_paper]`
+- 高负载下缓解KV传输拥塞 `[verified_by_paper]`
+- ICML 2026录用 `[verified_by_paper]`
+
+**工程启示**: 多轮对话是LLM服务的主要场景，PPD直接解决其效率瓶颈；对于agent/多轮RAG场景可显著降低延迟和带宽消耗。
+
+**局限性**: 三级架构增加了系统复杂度；路由策略需要根据SLO动态调整。
+
+**架构借鉴关系**: 对DistServe/Splitwise的改进——从二级P/D扩展为三级PPD；与Mooncake的KVCache Pool思路互补（Mooncake集中存储KV，PPD让KV留在decode节点）；与SGLang的RadixAttention互补（RadixAttention解决prefix复用，PPD解决跨节点KV传输）。

@@ -368,9 +368,114 @@ graph TD
 
 ## 最新进展 (2025-2026)
 
-- [**PPD Disaggregation**](https://arxiv.org/abs/2603.13358) (2026): 挑战"所有prefill都需要隔离"的假设，证明append-prefill对decode干扰比full-prefill小一个数量级
-- [**DuetServe**](https://arxiv.org/abs/2511.04791) (2025): 实验证明自适应intra-GPU协调可替代完全物理隔离，P/D disaggregation并非所有场景的最优解
-- [**VECTOR**](https://arxiv.org/abs/2605.23258) (2026): 证明二元keep-or-drop KV eviction策略次优，三路分配(保留/近似/驱逐)在相同budget下精度更好
-- [**MiKV**](https://openreview.net/forum?id=CRQ8JuQDEd) (ICLR 2025): 揭示KV cache eviction的隐藏风险——安全提示泄露、幻觉和关键上下文丢失，低精度保留优于完全丢弃
-- [**CriticalKV**](https://arxiv.org/abs/2502.03805) (2025): 证明仅用attention weight判断KV重要性不充分，需结合value states的输出扰动分析
-- [**Fingerprinting Inference Systems**](https://arxiv.org/abs/2605.29979) (2026): 揭示推理系统的数值偏差可被指纹识别，对安全性和信任有直接影响(已披露vLLM/SGLang漏洞)
+### [PPD Disaggregation](https://arxiv.org/abs/2603.13358) (ICML 2026)
+
+**问题**: 标准P/D disaggregation假设所有prefill都需要物理隔离到专用节点，但这一假设在多轮对话场景下导致不必要的KV传输开销。
+
+**方法**: 通过实验量化append-prefill（后续轮次的增量prefill）对decode的干扰程度，证明其比full-prefill小一个数量级。基于此引入三级节点角色，Turn 2+请求可在decode节点本地执行append-prefill。
+
+**关键结果**:
+- Append-prefill对decode干扰比full-prefill小一个数量级 `[verified_by_paper]`
+- Turn 2+ TTFT降低约68% `[verified_by_paper]`
+- ICML 2026录用 `[verified_by_paper]`
+
+**工程启示**: 挑战了"所有prefill都需要物理隔离"的假设——多轮场景下大部分prefill可以在decode节点本地完成，避免KV传输。
+
+**局限性**: 仅适用于多轮对话场景；首轮full-prefill仍需要隔离。
+
+**挑战的假设**: P/D disaggregation的核心假设"prefill干扰decode"在append-prefill场景下不成立，静态二级分离架构在多轮场景下次优。
+
+---
+
+### [DuetServe](https://arxiv.org/abs/2511.04791) (2025)
+
+**问题**: 完全物理隔离的P/D disaggregation浪费资源（模型权重重复、KV cache传输开销），但简单的聚合执行会导致prefill干扰decode的TBT延迟。
+
+**方法**: 默认聚合模式运行（prefill+decode同GPU），仅在检测到干扰威胁SLO时激活SM级空间分区。三个核心组件：attention-aware roofline模型（预测延迟）、分区优化器（选择最优SM划分）、无中断执行引擎。
+
+**关键结果**:
+- 相比SOTA框架吞吐提升1.3x `[verified_by_paper]`
+- 保持低生成延迟（TBT满足SLO） `[verified_by_paper]`
+- 避免了disaggregation的模型重复和KV传输开销 `[verified_by_paper]`
+
+**工程启示**: P/D disaggregation并非所有场景的最优解——中等负载下自适应intra-GPU协调更高效；SM级分区是NVIDIA GPU的原生能力，DuetServe将其自动化。
+
+**局限性**: 仅适用于单GPU内的协调；高负载场景仍需要物理disaggregation。
+
+**挑战的假设**: 挑战了"P/D disaggregation总是优于聚合执行"的假设，证明大部分时间聚合执行更高效，仅在必要时隔离。
+
+---
+
+### [VECTOR](https://arxiv.org/abs/2605.23258) (2026)
+
+**问题**: 现有KV cache eviction采用二元决策（保留或丢弃），被驱逐的token信息完全丢失，在中高压缩率下导致显著精度下降。
+
+**方法**: 引入三路分配框架：将token路由到保留（Retention）、近似（Approximation）、驱逐（Eviction）三类。关键设计：保留key vectors（维持attention路由稳定性），仅对value vectors做近似。路由决策结合重要性信号和可重建性信号。
+
+**关键结果**:
+- 在中高压缩率下显著改善quality-memory tradeoff `[verified_by_paper]`
+- 严格budget regime下增益最明显 `[verified_by_paper]`
+- 恢复了二元eviction下不可逆丢失的有用value信息 `[verified_by_paper]`
+
+**工程启示**: 二元keep-or-drop策略次优——三路分配在相同budget下精度更好；保留key、近似value的设计洞察：key影响attention路由，value影响输出值。
+
+**局限性**: 回归模型的推理有额外开销；需要离线校准可重建性评估。
+
+**挑战的假设**: 挑战了KV cache管理的二元决策范式，证明"保留-近似-驱逐"的连续谱优于"保留-丢弃"的离散决策。
+
+---
+
+### [MiKV](https://openreview.net/forum?id=CRQ8JuQDEd) (ICLR 2025)
+
+**问题**: KV cache eviction方法通常只关注精度指标（PPL、benchmark分数），忽略了eviction可能带来的安全风险——安全提示泄露、幻觉增加和关键上下文丢失。
+
+**方法**: 系统性分析KV cache eviction的隐藏风险，证明完全丢弃token信息可能导致安全对齐失效。提出低精度保留策略：对被驱逐的KV保留低精度副本（如INT2），而非完全丢弃。
+
+**关键结果**:
+- 揭示KV cache eviction的安全风险——安全提示可能被驱逐 `[verified_by_paper]`
+- 低精度保留优于完全丢弃 `[verified_by_paper]`
+- ICLR 2025录用 `[verified_by_paper]`
+
+**工程启示**: KV cache压缩不仅是精度问题，更是安全问题；生产系统中安全相关token（system prompt）应被保护不被驱逐。
+
+**局限性**: 低精度保留增加了存储开销（相比完全驱逐）；安全风险的量化依赖于特定攻击场景。
+
+**挑战的假设**: 挑战了"KV eviction只影响精度"的假设，揭示了安全维度的风险——eviction可能破坏模型的安全对齐。
+
+---
+
+### [CriticalKV](https://arxiv.org/abs/2502.03805) (2025)
+
+**问题**: 现有KV cache eviction方法主要依据attention weight大小判断token重要性，但attention weight仅反映query-key相似度，忽略了value states的贡献和预训练参数矩阵的影响。
+
+**方法**: 从attention层输出扰动角度分析KV cache驱逐的影响，证明重要性评估需要联合考虑attention weights + value state norms + 预训练参数矩阵。设计为即插即用增强模块，可叠加在任何现有eviction策略之上。
+
+**关键结果**:
+- 与3种SOTA eviction方法组合，跨3个LLM验证 `[verified_by_paper]`
+- 在29个数据集上平均将压缩损失降低超过一半 `[verified_by_paper]`
+- 验证了不同head和layer对cache eviction的敏感度差异 `[verified_by_paper]`
+
+**工程启示**: 仅看attention weight是不够的——value states同样重要；任何现有eviction方法都可通过叠加CriticalKV获得显著改进。
+
+**局限性**: 多因子评分增加了计算复杂度（虽然可忽略）；需要访问预训练参数矩阵信息。
+
+**挑战的假设**: 挑战了"attention weight是KV重要性的充分代理"的假设，证明需要结合value states的输出扰动分析。
+
+---
+
+### [Fingerprinting Inference Systems](https://arxiv.org/abs/2605.29979) (2026)
+
+**问题**: 推理系统通常被视为确定性黑箱——相同输入应产生相同输出。但不同系统组件（引擎、attention后端、GPU类型）是否引入可被识别的数值偏差？
+
+**方法**: 通过分析推理输出的数值偏差模式构建推理系统"指纹"，可区分不同推理引擎（vLLM vs SGLang）、不同attention后端、不同GPU类型。已向vLLM/SGLang披露相关漏洞。
+
+**关键结果**:
+- 可通过数值偏差指纹识别推理引擎/attention后端/GPU类型 `[verified_by_paper]`
+- 揭示系统组件的可区分性 `[verified_by_paper]`
+- 已披露vLLM/SGLang漏洞 `[verified_by_paper]`
+
+**工程启示**: 推理系统的数值行为不是黑箱——可被外部观察者识别；对模型服务的安全性和信任有直接影响；benchmark设计需要考虑数值确定性。
+
+**局限性**: 指纹识别准确率受输出长度和采样策略影响；防御措施可能降低指纹可靠性。
+
+**挑战的假设**: 挑战了"推理系统是确定性黑箱"的假设，揭示了系统组件的数值可区分性及其安全影响。

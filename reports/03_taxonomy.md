@@ -313,11 +313,153 @@ H2O (2023) → Scissorhands → SnapKV → AdaKV → [DynamicKV (2024)](https://
 
 ## 最新进展 (2025-2026)
 
-- [**EAGLE-3**](https://arxiv.org/abs/2503.01840) (Peking University, 2025): Training-Time Test架构的draft model，直接预测token而非feature，LLaMA-3.3-70B上达到4.79x加速
-- [**NSA (Native Sparse Attention)**](https://arxiv.org/abs/2502.11089) (DeepSeek, 2025): 预训练级别的稀疏注意力机制，硬件友好的block-sparse设计，集成到DeepSeek模型中
-- [**FlexPrefill**](https://arxiv.org/abs/2502.20766) (2025): 上下文感知的动态稀疏attention，实时调整attention pattern和计算预算
-- [**XAttention**](https://arxiv.org/abs/2503.16428) (2025): 基于反对角线评分的block-sparse attention框架，高效识别和剪枝非关键attention块
-- [**FlatQuant**](https://arxiv.org/abs/2410.09426) (ICML 2025): 通过仿射变换平滑outlier实现W4A4KV4量化，LLaMA-3-70B精度损失<1%，prefill加速2.3x
-- [**Quartet**](https://arxiv.org/abs/2505.14669) (NeurIPS 2025): 原生FP4训练框架，揭示低精度scaling law，Blackwell架构上实现端到端FP4训练
-- [**MoBA (Mixture of Block Attention)**](https://arxiv.org/abs/2502.13189) (2025): 将MoE思想应用于attention block选择，路由式block稀疏注意力
-- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, 2025): 数据中心级推理框架，原生支持P/D disaggregation和多节点调度
+### [NSA (Native Sparse Attention)](https://arxiv.org/abs/2502.11089) (DeepSeek, 2025)
+
+**问题**: 传统dense attention的二次方复杂度限制了长上下文LLM的训练和推理效率，而现有稀疏方法要么不可训练，要么未针对现代硬件优化。
+
+**方法**: NSA提出动态分层稀疏策略，结合粗粒度token压缩（捕获全局上下文）和细粒度token选择（保持局部精度）。关键创新在于算术强度平衡的算法设计，使稀疏pattern与现代GPU的计算特性对齐，支持端到端原生训练。
+
+**关键结果**:
+- 64K序列上decode/forward/backward均获得显著加速 `[verified_by_paper]`
+- 预训练模型在通用benchmark、长上下文任务上匹配或超越Full Attention `[verified_by_paper]`
+- 已集成到DeepSeek模型架构中 `[verified_by_paper]`
+
+**工程启示**: 代表了稀疏attention从"推理时近似"到"训练时原生"的范式转变，硬件对齐设计使其在实际GPU上获得真实加速。
+
+**局限性**: 需要从预训练阶段引入，无法直接应用于已训练的dense模型；仅在DeepSeek内部验证，社区复现受限。
+
+**分类位置**: 一、Attention Optimization → 1.3 Sparse Attention → Learned Sparse (Natively Trainable)
+
+---
+
+### [MoBA (Mixture of Block Attention)](https://arxiv.org/abs/2502.13189) (MoonshotAI, 2025)
+
+**问题**: 现有长上下文稀疏attention方法要么施加强结构偏置（sink/window），要么使用线性近似牺牲推理能力，缺乏让模型自主决定注意力分配的灵活机制。
+
+**方法**: 将Mixture of Experts (MoE)原理应用于attention机制的block级别。每个query通过路由机制自主选择要attend的KV block，遵循"less structure"原则——不预设固定pattern，让模型学习最优的稀疏分配。
+
+**关键结果**:
+- 已部署到Kimi生产系统支持长上下文请求 `[verified_by_paper]`
+- 实现full-to-sparse的无缝过渡，不损害性能 `[verified_by_paper]`
+- 开源代码可用 `[verified_by_code]`
+
+**工程启示**: MoE路由思想在attention中的成功应用，开辟了"路由式稀疏attention"新类别；生产级验证（Kimi）证明了方法的实用性和鲁棒性。
+
+**局限性**: 路由决策本身有计算开销，短序列场景可能不划算；论文未提供详细的加速数值对比。
+
+**分类位置**: 一、Attention Optimization → 1.3 Sparse Attention → Learned Sparse (Router-based Block Selection)
+
+---
+
+### [FlexPrefill](https://arxiv.org/abs/2502.20766) (ICLR 2025 Oral)
+
+**问题**: 长序列推理的prefill阶段attention复杂度随prompt长度二次增长，现有稀疏方法使用固定pattern，缺乏对不同输入和attention head的自适应能力。
+
+**方法**: 引入Query-Aware Sparse Pattern Determination（使用Jensen-Shannon散度自适应判断每个head的稀疏策略）和Cumulative-Attention Based Index Selection（动态选择query-key索引，确保attention score累积和达到预定义阈值），联合优化每个head的稀疏pattern和比例。
+
+**关键结果**:
+- 在速度和精度上均显著优于先前方法 `[verified_by_paper]`
+- 每个attention head独立优化稀疏pattern和ratio `[verified_by_paper]`
+- ICLR 2025 Oral `[verified_by_paper]`
+
+**工程启示**: Per-head自适应是稀疏attention的关键；JS散度作为pattern选择信号计算开销低，适合在线使用；专注prefill阶段，与decode阶段的KV eviction方法互补。
+
+**局限性**: 需要先计算部分attention score来决定稀疏pattern（两阶段开销）；仅针对prefill阶段。
+
+**分类位置**: 一、Attention Optimization → 1.3 Sparse Attention → Dynamic Sparse (Query-Aware Adaptive)
+
+---
+
+### [XAttention](https://arxiv.org/abs/2503.16428) (MIT HAN Lab, 2025)
+
+**问题**: 长上下文Transformer推理中attention计算是主要瓶颈，需要高效识别和剪枝非关键attention block的方法，且不能要求模型重训练。
+
+**方法**: 发现attention矩阵中反对角线值之和是block重要性的强代理指标。基于此洞察，设计plug-and-play框架：计算每个block的反对角线分数，剪枝低分block，仅对高分block执行完整attention计算。无需模型重训练。
+
+**关键结果**:
+- Attention计算加速最高13.5x `[verified_by_paper]`
+- 在RULER、LongBench、VideoMME、VBench上精度接近full attention `[verified_by_paper]`
+- 跨模态验证（语言+视频） `[verified_by_paper]`
+- 开源代码可用 `[verified_by_code]`
+
+**工程启示**: 反对角线评分是极低开销的block重要性代理；plug-and-play特性使其可直接部署到现有系统；跨模态有效性表明该方法捕获了attention的通用结构特性。
+
+**局限性**: 反对角线评分是启发式代理，可能在某些特殊attention pattern下失效；block粒度限制了精度。
+
+**分类位置**: 一、Attention Optimization → 1.3 Sparse Attention → Dynamic Sparse (Scoring-based Block Pruning)
+
+---
+
+### [EAGLE-3](https://arxiv.org/abs/2503.01840) (Peking University, 2025)
+
+**问题**: EAGLE/EAGLE-2在feature level进行autoregression，复用target model顶层特征预测下一个draft token，feature prediction范式存在天花板——扩大训练数据带来的收益有限。
+
+**方法**: 放弃feature prediction，转为直接token prediction。用多层特征融合（Training-Time Test技术）替代仅依赖顶层特征，从target model多个层提取信息，使draft model能充分利用更多训练数据。
+
+**关键结果**:
+- 最高6.5x加速（相比标准autoregressive decoding） `[verified_by_paper]`
+- LLaMA-3.3-70B达4.79x加速 `[verified_by_paper]`
+- SGLang框架中batch size 64下吞吐提升1.38x `[verified_by_paper]`
+
+**工程启示**: 代表了speculative decoding draft model设计的范式转变：从feature prediction到token prediction；多层特征融合的思路可推广到其他draft架构。
+
+**局限性**: 需要训练专用draft model；多层特征提取增加了与target model的耦合度。
+
+**分类位置**: 六、Decoding Strategy → 6.1 Speculative Decoding (Multi-layer Feature Fusion Draft)
+
+---
+
+### [FlatQuant](https://arxiv.org/abs/2410.09426) (ICML 2025)
+
+**问题**: LLM量化受outlier影响严重，现有方法处理后分布仍然"陡峭且分散"，在W4A4等激进量化设置下精度损失显著。
+
+**方法**: 为每个线性层学习仿射变换，最大化量化前权重/激活分布的"平坦度"。用Kronecker积分解仿射变换矩阵为两个轻量矩阵，大幅降低参数量和计算开销。所有操作融合为单个kernel。
+
+**关键结果**:
+- LLaMA-3-70B W4A4：精度损失<1%，超越SpinQuant 7.5% `[verified_by_paper]`
+- Prefill加速最高2.3x `[verified_by_paper]`
+- Decode加速最高1.7x `[verified_by_paper]`
+
+**工程启示**: W4A4KV4的SOTA方案，Kronecker分解的思路可推广到其他需要轻量变换的场景；校准成本低（几小时），适合快速部署新模型。
+
+**局限性**: 可学习变换增加了部署复杂度；需要per-layer校准。
+
+**分类位置**: 三、Quantization → 3.2 Weight + Activation Quantization (Learned Transform PTQ)
+
+---
+
+### [Quartet](https://arxiv.org/abs/2505.14669) (NeurIPS 2025)
+
+**问题**: 随着Blackwell架构提供原生FP4硬件支持，需要验证FP4训练的可行性并建立低精度scaling law。
+
+**方法**: 端到端FP4训练，所有主要计算（线性层）在FP4精度下执行。针对Blackwell架构优化CUDA kernel，前向和反向传播均使用FP4。揭示低精度scaling law：量化不同bit-width和训练配置间的性能tradeoff。
+
+**关键结果**:
+- FP4训练是FP16和FP8训练的竞争性替代方案 `[verified_by_paper]`
+- 提升吞吐量和能效 `[verified_by_paper]`
+- NeurIPS 2025录用 `[verified_by_paper]`
+
+**工程启示**: Blackwell GPU用户应考虑FP4训练以获得吞吐和能效优势；low-precision scaling law可指导训练预算分配决策。
+
+**局限性**: 依赖Blackwell硬件支持；FP4训练可能需要更多数据/步数来匹配FP16精度。
+
+**分类位置**: 三、Quantization → 3.4 FP8/Mixed Precision → FP4 Training (Hardware-Native Low Precision)
+
+---
+
+### [NVIDIA Dynamo](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, 2025)
+
+**问题**: 大规模LLM推理部署需要数据中心级编排能力，包括P/D disaggregation、多节点Expert Parallelism和智能路由调度，现有框架缺乏统一解决方案。
+
+**方法**: 提供数据中心级推理编排框架，原生支持P/D disaggregation、GPU autoscaling（基于推理负载的自动扩缩容）、prefix-aware request routing，并支持vLLM/TensorRT-LLM/SGLang作为worker backend。
+
+**关键结果**:
+- 原生P/D disaggregation和多节点EP支持 `[verified_by_code]`
+- GPU-level autoscaling，基于queue depth和SLO violation rate `[verified_by_code]`
+- 支持多种推理引擎作为backend `[verified_by_code]`
+
+**工程启示**: P/D disaggregation已成为生产标准；面向100+ GPU的大规模集群，小规模部署overhead不划算。
+
+**局限性**: 需要高带宽互联（InfiniBand/RoCE）；大规模集群专用，小规模部署不适用。
+
+**分类位置**: 五、Scheduling & Serving → 5.2 Disaggregated Prefill/Decode (Datacenter-Scale Orchestration)

@@ -374,8 +374,95 @@ $$\text{Cost per 1M tokens} = \frac{GPU\_price\_per\_hour \times N_{GPUs}}{throu
 
 ## 最新进展 (2025-2026)
 
-- [**Prism Benchmark**](https://github.com/llm-d/llm-d) (llm-d, 2025): 可复现的分布式推理benchmark工作流，覆盖disaggregated serving、wide-EP等生产场景
-- [**GPT-OSS-120B Benchmark**](https://www.clarifai.com/blog/comparing-sglang-vllm-and-tensorrt-llm-with-gpt-oss-120b) (Clarifai, 2025): vLLM vs SGLang vs TensorRT-LLM在H100上的标准化对比，100并发下vLLM达4741 tok/s
-- [**Fingerprinting Inference Systems**](https://arxiv.org/abs/2605.29979) (2026): 通过数值偏差指纹识别推理引擎/attention后端/GPU类型，揭示系统组件的可区分性
-- [**vLLM Thesis**](https://www2.eecs.berkeley.edu/Pubs/TechRpts/2025/Archive/EECS-2025-192.pdf) (UC Berkeley, 2025): Woosuk Kwon博士论文，系统化总结vLLM设计哲学和PagedAttention的完整技术栈
-- [**LLM Inference Optimization Survey**](https://arxiv.org/abs/2507.19595) (2025): 高效attention机制综述，系统分类linear/sparse/hybrid attention方法及其性能对比
+### [Prism Benchmark](https://github.com/llm-d/llm-d) (llm-d, 2025)
+
+**问题**: 分布式推理系统（disaggregated serving、wide-EP等）缺乏标准化的可复现benchmark工作流，各系统的性能对比缺乏统一基准。
+
+**方法**: 提供端到端可复现的分布式推理benchmark工作流，覆盖disaggregated serving、wide Expert Parallelism等生产场景。基于Kubernetes原生部署，支持自动化测试和结果收集。
+
+**关键结果**:
+- 覆盖disaggregated serving和wide-EP生产场景 `[verified_by_code]`
+- Kubernetes原生可复现工作流 `[verified_by_code]`
+- 与llm-d框架深度集成 `[verified_by_code]`
+
+**工程启示**: 填补了分布式推理benchmark的空白；Kubernetes原生设计使得跨团队复现成为可能；适合评估P/D disaggregation和MoE推理的真实性能。
+
+**局限性**: 依赖Kubernetes环境，非K8s用户无法直接使用；目前主要覆盖llm-d支持的场景。
+
+**复现方法论**: 基于K8s Gateway API的标准化部署，固定硬件配置和负载模式，支持A/B对比测试。
+
+---
+
+### [GPT-OSS-120B Benchmark](https://www.clarifai.com/blog/comparing-sglang-vllm-and-tensorrt-llm-with-gpt-oss-120b) (Clarifai, 2025)
+
+**问题**: 主流推理框架（vLLM、SGLang、TensorRT-LLM）在大模型上的性能对比缺乏独立第三方验证，各框架自报数据的测试条件不一致。
+
+**方法**: 在H100 GPU上使用GPT-OSS-120B模型进行标准化对比，统一测试条件（100并发、相同数据集），覆盖throughput、latency、资源利用率等多维指标。
+
+**关键结果**:
+- 100并发下vLLM达4741 tok/s `[unverified_claim]`
+- 三大框架在相同条件下的标准化对比 `[unverified_claim]`
+- H100上的生产级负载测试 `[unverified_claim]`
+
+**工程启示**: 独立第三方benchmark比各框架自报数据更可信；100并发是生产环境的典型负载水平；大模型（120B）的benchmark结果与小模型（7B）可能有不同的框架排名。
+
+**局限性**: 博客形式发布，测试细节（GPU频率锁定、warmup策略等）未完全披露；单一模型规模的结果不能推广到所有场景。
+
+**复现方法论**: 需要H100多卡环境；建议锁定GPU频率、使用相同数据集、至少1000请求的稳态测量。
+
+---
+
+### [Fingerprinting Inference Systems](https://arxiv.org/abs/2605.29979) (2026)
+
+**问题**: 不同推理引擎、attention后端、GPU类型产生的数值偏差是否可被系统性识别？这对推理系统的安全性、信任和审计有何影响？
+
+**方法**: 通过分析推理输出的数值偏差模式（浮点精度差异、kernel实现差异、硬件特性差异），构建推理系统的"指纹"。可区分不同推理引擎（vLLM vs SGLang）、不同attention后端、不同GPU类型。
+
+**关键结果**:
+- 可通过数值偏差指纹识别推理引擎/attention后端/GPU类型 `[verified_by_paper]`
+- 揭示系统组件的可区分性 `[verified_by_paper]`
+- 已披露vLLM/SGLang相关漏洞 `[verified_by_paper]`
+
+**工程启示**: 推理系统的数值行为不是黑箱——可被外部观察者识别；对模型服务的安全性和信任有直接影响；benchmark设计需要考虑数值确定性。
+
+**局限性**: 指纹识别的准确率受输出长度和采样策略影响；防御措施（如添加噪声）可能降低指纹可靠性。
+
+**复现方法论**: 需要对同一模型在不同系统配置下收集大量输出样本，分析数值分布差异。
+
+---
+
+### [vLLM Thesis](https://www2.eecs.berkeley.edu/Pubs/TechRpts/2025/Archive/EECS-2025-192.pdf) (UC Berkeley, 2025)
+
+**问题**: vLLM的设计哲学和PagedAttention的完整技术栈缺乏系统化的学术总结，社区对其内部设计决策的理解碎片化。
+
+**方法**: Woosuk Kwon博士论文系统化总结vLLM从PagedAttention到V1架构的完整演进，包括设计动机、关键决策的tradeoff分析、性能建模方法论。
+
+**关键结果**:
+- 系统化总结vLLM设计哲学和PagedAttention完整技术栈 `[verified_by_paper]`
+- 包含未在原始论文中披露的设计决策分析 `[verified_by_paper]`
+- 覆盖从V0到V1的架构演进 `[verified_by_paper]`
+
+**工程启示**: 是理解vLLM内部设计的最权威参考；包含benchmark方法论的详细讨论；对于构建类似系统的团队具有重要参考价值。
+
+**局限性**: 学位论文篇幅较长，非快速参考材料；部分内容可能已被后续版本更新。
+
+**复现方法论**: 论文中包含详细的实验设置和性能建模方法，可作为benchmark方法论的参考标准。
+
+---
+
+### [LLM Inference Optimization Survey](https://arxiv.org/abs/2507.19595) (2025)
+
+**问题**: 高效attention机制（linear/sparse/hybrid）的研究快速发展，缺乏系统性分类和性能对比的综述。
+
+**方法**: 系统分类linear attention、sparse attention、hybrid attention方法，提供统一的性能对比框架，分析各方法在不同序列长度和硬件配置下的适用性。
+
+**关键结果**:
+- 系统分类linear/sparse/hybrid attention方法 `[verified_by_paper]`
+- 提供统一性能对比框架 `[verified_by_paper]`
+- 分析各方法的适用场景和tradeoff `[verified_by_paper]`
+
+**工程启示**: 适合快速了解attention优化全景；提供了方法选择的决策框架；对benchmark设计中attention方法的对比维度有指导意义。
+
+**局限性**: 综述性质，不包含新方法；部分对比数据来自原始论文，测试条件可能不一致。
+
+**复现方法论**: 综述中提供的对比框架可作为attention方法benchmark的设计参考。
