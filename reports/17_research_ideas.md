@@ -4,6 +4,71 @@
 
 ---
 
+## 选题总览排序表
+
+| # | 选题 | 方向 | 工程可行性 | 研究新颖度 | GPU-hours 估计 | 风险 |
+|---|------|------|:---:|:---:|---:|:---:|
+| 29 | 请求长度预测驱动的调度优化 | Serving | 5 | 3 | 100-500 | low |
+| 37 | Chunk-Level Attention Pareto 分析 | Long Context | 5 | 2 | 200-500 | low |
+| 6 | 自适应 KV cache 预算分配 | KV Cache | 4 | 4 | 500-1K | low |
+| 8 | Cross-Request KV cache 共享 | KV Cache | 4 | 3 | 500-1K | low |
+| 14 | 量化感知 Speculative Decoding | Quantization | 4 | 3 | 200-500 | low |
+| 15 | KV cache Token-Aware 自适应精度 | Quantization | 4 | 4 | 500-1K | low |
+| 16 | Batch-Aware Speculative Decoding | Spec Decoding | 4 | 4 | 500-1K | low |
+| 18 | Tree Decoding 最优树结构搜索 | Spec Decoding | 4 | 3 | 200-500 | low |
+| 27 | Prefix-Aware Batching 最优分组 | Serving | 4 | 3 | 200-500 | low |
+| 28 | Continuous batching 公平性保证 | Serving | 4 | 3 | 500-1K | low |
+| 48 | Early Exit + KV cache 压缩协同 | 跨方向 | 4 | 3 | 500-1K | low |
+| 49 | Non-Transformer + Speculative Decoding | 跨方向 | 4 | 4 | 1K-2K | low |
+| 11 | 量化误差层间传播建模 | Quantization | 4 | 4 | 1K-2K | medium |
+| 12 | Activation Outlier 统一框架 | Quantization | 4 | 3 | 1K-2K | medium |
+| 31 | MoE Expert 动态 Offloading | MoE | 4 | 3 | 500-1K | medium |
+| 33 | MoE Expert-Level Quantization | MoE | 4 | 3 | 1K-2K | medium |
+| 38 | 动态 Context Window 自适应选择 | Long Context | 4 | 3 | 500-1K | medium |
+| 40 | Cross-Layer KV Sharing 模式搜索 | Long Context | 4 | 4 | 1K-2K | medium |
+| 43 | CPU SIMD 自适应优化 | Hardware | 4 | 2 | 200-500 | medium |
+| 52 | Kernel Auto-Selection | 跨方向 | 4 | 3 | 500-1K | medium |
+| 53 | Prefill Chunking 最优 Chunk Size | 跨方向 | 4 | 3 | 500-1K | medium |
+| 55 | Carbon-Aware Scheduling | 跨方向 | 4 | 3 | 200-500 | medium |
+| 20 | Multi-Model Speculative Router | Spec Decoding | 4 | 4 | 1K-2K | medium |
+| 1 | GQA/MLA Fused Decode Kernel | Attention | 3 | 4 | 2K-5K | medium |
+| 3 | FP4 Attention 精度恢复 | Attention | 3 | 4 | 2K-5K | medium |
+| 5 | Ring Attention 深度融合 | Attention | 3 | 3 | 2K-5K | medium |
+| 7 | KV cache Learned Compression | KV Cache | 3 | 5 | 2K-5K | medium |
+| 9 | KV cache Offloading 预取优化 | KV Cache | 3 | 3 | 2K-5K | medium |
+| 17 | 无 Draft Model Self-Speculation | Spec Decoding | 3 | 4 | 2K-5K | medium |
+| 19 | Spec Decoding + KV Compression 联合 | Spec Decoding | 3 | 4 | 2K-5K | medium |
+| 21 | TP 通信压缩自适应策略 | Distributed | 3 | 3 | 5K-10K | medium |
+| 22 | EP + TP 混合并行配置搜索 | Distributed | 3 | 3 | 5K-10K | medium |
+| 23 | P/D disaggregation 动态负载均衡 | Distributed | 3 | 4 | 5K-10K | medium |
+| 26 | SLO-Aware 多目标调度器 | Serving | 3 | 4 | 2K-5K | medium |
+| 30 | Auto-Scaling + KV cache 迁移 | Serving | 3 | 4 | 2K-5K | medium |
+| 34 | MoE + Speculative Decoding 协同 | MoE | 3 | 4 | 5K-10K | medium |
+| 39 | Streaming KV cache 生命周期管理 | Long Context | 3 | 4 | 2K-5K | medium |
+| 42 | 移动端 LLM 内存带宽优化 | Hardware | 3 | 3 | 1K-2K | medium |
+| 46 | Quantization + Sparse 联合优化 | 跨方向 | 3 | 4 | 5K-10K | medium |
+| 51 | CP + KV Quantization 联合设计 | 跨方向 | 3 | 3 | 5K-10K | medium |
+| 54 | Test-Time Scaling 推理系统优化 | 跨方向 | 3 | 5 | 5K-10K | medium |
+| 2 | 动态稀疏度感知 Attention Kernel | Attention | 2 | 5 | 5K-10K | high |
+| 4 | Prefill-Decode 统一 Kernel | Attention | 2 | 4 | 5K-10K | high |
+| 10 | MLA 下的 KV cache 压缩新范式 | KV Cache | 2 | 5 | 10K+ | high |
+| 13 | W4A4 全 INT4 推理可行性 | Quantization | 2 | 5 | 10K+ | high |
+| 24 | 异构集群 LLM 推理调度 | Distributed | 2 | 4 | 10K+ | high |
+| 25 | 多节点 KV cache 零拷贝优化 | Distributed | 2 | 4 | 10K+ | high |
+| 32 | EP 负载均衡优化 | MoE | 2 | 4 | 10K+ | high |
+| 35 | MoE 通信-计算 Overlap | MoE | 2 | 4 | 10K+ | high |
+| 36 | 百万级 Context 分层 KV cache | Long Context | 2 | 5 | 10K+ | high |
+| 41 | NPU Kernel 自动生成 | Hardware | 2 | 4 | 10K+ | high |
+| 44 | FPGA Sparse Attention 加速器 | Hardware | 2 | 4 | 10K+ | high |
+| 45 | Tensor Core 非标准数据格式 | Hardware | 2 | 5 | 10K+ | high |
+| 47 | P/D disaggregation + Spec Decoding | 跨方向 | 2 | 5 | 10K+ | high |
+| 50 | 全栈优化统一框架 | 跨方向 | 2 | 4 | 10K+ | high |
+
+> 排序依据：工程可行性（降序）> 风险（升序）> 研究新颖度（降序）  
+> 工程可行性：5=可直接实现, 1=需要全栈能力；研究新颖度：5=全新方向, 1=增量改进
+
+---
+
 ## 一、Attention Kernel 优化
 
 ### 选题 1: 面向 GQA/MLA 的 Fused Decode Kernel
@@ -48,9 +113,9 @@
 
 ---
 
-## 二、KV Cache 压缩与管理
+## 二、KV cache 压缩与管理
 
-### 选题 6: 基于 Attention Pattern 的自适应 KV Cache 预算分配
+### 选题 6: 基于 Attention Pattern 的自适应 KV cache 预算分配
 - **problem**: 现有 KV cache eviction（[H2O](https://arxiv.org/abs/2306.14048), [SnapKV](https://arxiv.org/abs/2404.14469)）对所有层使用相同策略，但不同层的 attention 模式差异巨大
 - **motivation**: 底层倾向 local attention，高层倾向 global attention，统一策略导致信息丢失不均匀
 - **possible_method**: 在线 profiling 每层 attention entropy，动态分配每层 KV cache budget（类似 [AdaKV](https://arxiv.org/abs/2407.11550) 但更细粒度）
@@ -58,7 +123,7 @@
 - **expected_experiment**: 在 LongBench 上测量不同 budget 分配策略的 accuracy，对比均匀分配和自适应分配
 - **engineering_difficulty**: 3
 
-### 选题 7: KV Cache 的 learned compression codec
+### 选题 7: KV cache 的 learned compression codec
 - **problem**: 现有 KV quantization（[KIVI](https://arxiv.org/abs/2402.02750), [KVQuant](https://arxiv.org/abs/2401.18079)）使用固定量化方案，未利用 KV cache 的时序冗余和跨层相关性
 - **motivation**: 相邻 token 的 KV 向量高度相似（temporal redundancy），可用 delta coding 进一步压缩
 - **possible_method**: 轻量级 neural codec（类似 [NexusQuant](https://arxiv.org/abs/2505.00949) 的 temporal predictive coding），在线训练 predictor，只存储残差
@@ -66,7 +131,7 @@
 - **expected_experiment**: 在 Llama-3-8B 128K context 上测量压缩比 vs PPL，对比 [KIVI](https://arxiv.org/abs/2402.02750)、[KVQuant](https://arxiv.org/abs/2401.18079) 和本方法
 - **engineering_difficulty**: 4
 
-### 选题 8: Cross-Request KV Cache 共享的一致性协议
+### 选题 8: Cross-Request KV cache 共享的一致性协议
 - **problem**: 多用户共享 prefix（system prompt）时，KV cache 的一致性管理缺乏系统化方案
 - **motivation**: 生产环境中 70%+ 请求共享相同 system prompt，高效共享可节省 50%+ 显存
 - **possible_method**: 设计 copy-on-write KV cache 管理器，结合 [RadixAttention](https://arxiv.org/abs/2312.07104) 的 prefix tree 和 reference counting
@@ -74,7 +139,7 @@
 - **expected_experiment**: 在多租户场景（100 concurrent users, 80% prefix overlap）下测量 throughput 和 memory utilization
 - **engineering_difficulty**: 3
 
-### 选题 9: KV Cache Offloading 的预取策略优化
+### 选题 9: KV cache Offloading 的预取策略优化
 - **problem**: 长 context 场景下 KV cache 需要 offload 到 CPU/SSD，但 naive prefetch 导致 GPU idle
 - **motivation**: 128K+ context 的 KV cache 超过单 GPU 显存，offloading 是必需但 latency 是瓶颈
 - **possible_method**: 基于 attention score history 预测下一步需要的 KV block，异步预取到 GPU
@@ -82,7 +147,7 @@
 - **expected_experiment**: 在 Llama-3-70B 256K context 上测量 TPOT，对比无 offload、naive offload 和智能预取
 - **engineering_difficulty**: 4
 
-### 选题 10: [MLA](https://arxiv.org/abs/2405.04434) 架构下的 KV Cache 压缩新范式
+### 选题 10: [MLA](https://arxiv.org/abs/2405.04434) 架构下的 KV cache 压缩新范式
 - **problem**: [DeepSeek-V3](https://arxiv.org/abs/2412.19437) 的 MLA 已将 KV cache 压缩到 latent space（512d），传统 KV compression 方法不再适用
 - **motivation**: [MLA](https://arxiv.org/abs/2405.04434) 改变了 KV cache 的结构，需要新的压缩/eviction 策略
 - **possible_method**: 在 latent space 中进行 importance scoring 和 selective eviction，利用 latent 的低秩特性进一步量化
@@ -126,7 +191,7 @@
 - **expected_experiment**: 测量不同 draft/target 量化组合下的 acceptance rate 和 end-to-end speedup
 - **engineering_difficulty**: 3
 
-### 选题 15: KV Cache 量化的 Token-Aware 自适应精度
+### 选题 15: KV cache 量化的 Token-Aware 自适应精度
 - **problem**: 现有 KV cache quantization 对所有 token 使用相同 bit-width，但 attention sink token 和 recent token 重要性远高于中间 token
 - **motivation**: 对重要 token 保持高精度、对不重要 token 激进压缩，可在相同显存下保持更好精度
 - **possible_method**: 基于 cumulative attention score 动态分配 FP16/FP8/INT4/INT2 精度
@@ -162,7 +227,7 @@
 - **expected_experiment**: 在代码生成和对话两种 task 上对比固定树 vs 动态树的 acceptance rate 和 speedup
 - **engineering_difficulty**: 3
 
-### 选题 19: [Speculative Decoding](https://arxiv.org/abs/2211.17192) 与 KV Cache Compression 的联合优化
+### 选题 19: [Speculative Decoding](https://arxiv.org/abs/2211.17192) 与 KV cache compression 的联合优化
 - **problem**: Speculative decoding 生成的 draft token 需要分配 KV cache，但大部分会被拒绝，造成 KV cache 浪费
 - **motivation**: 在 long context 场景下，draft token 的 KV cache 开销不可忽略
 - **possible_method**: 对 draft token 使用低精度 KV cache（INT4），验证通过后再升级为高精度；或延迟 KV cache 写入
@@ -214,7 +279,7 @@
 - **expected_experiment**: 在混合 A100+H100 集群上对比异构调度 vs 同构调度的 cost-efficiency
 - **engineering_difficulty**: 5
 
-### 选题 25: 多节点 KV Cache 传输的零拷贝优化
+### 选题 25: 多节点 KV cache 传输的零拷贝优化
 - **problem**: P/D 分离架构中，KV cache 从 prefill node 传输到 decode node 的延迟高（RDMA overhead）
 - **motivation**: KV cache 传输延迟直接影响 TTFT，是 P/D 分离的主要开销
 - **possible_method**: 利用 GPUDirect RDMA + KV cache 压缩 + pipeline 传输，减少传输量和延迟
@@ -258,7 +323,7 @@
 - **expected_experiment**: 在 ShareGPT/LMSYS trace 上测量预测准确率和调度效率提升
 - **engineering_difficulty**: 2
 
-### 选题 30: Auto-Scaling 与 KV Cache 迁移的联合优化
+### 选题 30: Auto-Scaling 与 KV cache 迁移的联合优化
 - **problem**: 弹性扩缩容时，新实例需要重建 KV cache（cold start），导致 TTFT spike
 - **motivation**: 云环境下 auto-scaling 是标配，但 KV cache 的有状态性使得扩容延迟高
 - **possible_method**: KV cache 快照 + 增量迁移，结合 prefix cache 预热和 request routing
@@ -314,7 +379,7 @@
 
 ## 八、Long Context
 
-### 选题 36: 百万级 Context 的分层 KV Cache 管理
+### 选题 36: 百万级 Context 的分层 KV cache 管理
 - **problem**: 1M+ context 的 KV cache 无法全部放入 GPU 显存，需要多级存储（GPU/CPU/SSD）
 - **motivation**: GPT-4 Turbo 128K、Gemini 1M 等长 context 模型的部署需求
 - **possible_method**: 基于 attention locality 的分层缓存——recent window 在 GPU，medium-range 在 CPU，long-range 在 SSD
@@ -338,7 +403,7 @@
 - **expected_experiment**: 在 multi-document QA 上测量动态 window vs 固定 window 的 accuracy 和 latency
 - **engineering_difficulty**: 3
 
-### 选题 39: Streaming Inference 的 KV Cache 生命周期管理
+### 选题 39: Streaming Inference 的 KV cache 生命周期管理
 - **problem**: [StreamingLLM](https://arxiv.org/abs/2309.17453) 使用 attention sink + sliding window，但丢弃的 token 信息不可恢复
 - **motivation**: 对话系统需要无限长 context，但显存有限
 - **possible_method**: 将 evicted KV cache 压缩存储到 CPU，需要时通过 retrieval 恢复（类似 [Infini-attention](https://arxiv.org/abs/2404.07143) 的 compressive memory）
@@ -418,7 +483,7 @@
 - **expected_experiment**: 在 P/D 分离集群上实现 speculative decoding，测量 vs 非分离架构的 speedup
 - **engineering_difficulty**: 5
 
-### 选题 48: Early Exit + [KV Cache Compress](https://arxiv.org/abs/2305.17118)ion 的协同设计
+### 选题 48: Early Exit + [KV Cache Compression](https://arxiv.org/abs/2305.17118) 的协同设计
 - **problem**: Early exit 在浅层输出 token，但深层的 KV cache 仍被分配，造成浪费
 - **motivation**: 如果 token 在第 N 层 exit，第 N+1 到 L 层的 KV cache 可以释放
 - **possible_method**: 设计 exit-aware KV cache manager，动态释放未使用层的 KV cache
@@ -442,7 +507,7 @@
 - **expected_experiment**: 在 Llama-3-70B serving 场景下对比单一优化 vs 组合优化的 throughput 和 cost/token
 - **engineering_difficulty**: 5
 
-### 选题 51: Context Parallelism + KV Cache Quantization 的联合设计
+### 选题 51: Context Parallelism + KV cache Quantization 的联合设计
 - **problem**: CP 将 KV cache 分布到多 GPU，量化可减少每 GPU 的 KV cache 大小，但联合使用时通信格式需要统一
 - **motivation**: 1M context 需要 CP，同时 KV cache 量化可减少跨 GPU 通信量
 - **possible_method**: 在 CP 通信中直接传输量化后的 KV（INT4/FP8），接收端 dequantize
@@ -489,7 +554,7 @@
 | 方向 | 选题数 |
 |------|--------|
 | Attention Kernel | 5 |
-| KV Cache | 5 |
+| KV cache | 5 |
 | Quantization | 5 |
 | [Speculative Decoding](https://arxiv.org/abs/2211.17192) | 5 |
 | Distributed Inference | 5 |
@@ -529,6 +594,6 @@
 - [**Speculative Speculative Decoding (Saguaro)**](https://arxiv.org/abs/2603.03251) (2026): 二级speculation架构，比现有最优speculative decoding快2x，验证了多级speculation的可行性
 - [**Learning To Draft**](https://arxiv.org/abs/2603.01639) (2026): 强化学习自适应draft深度和tree大小，验证了选题16(Batch-Aware Speculative Decoding)的研究方向
 - [**RDKV**](https://arxiv.org/abs/2605.08317) (2026): 率失真优化统一eviction和quantization，验证了选题15(Token-Aware自适应精度)的研究方向
-- [**PPD Disaggregation**](https://arxiv.org/abs/2603.13358) (2026): 多轮对话的三级disaggregation，验证了选题23(动态负载均衡)和选题30(KV Cache迁移)的研究方向
+- [**PPD Disaggregation**](https://arxiv.org/abs/2603.13358) (2026): 多轮对话的三级disaggregation，验证了选题23(动态负载均衡)和选题30(KV cache迁移)的研究方向
 - [**LittleBit**](https://arxiv.org/abs/2506.13771) (NeurIPS 2025): 0.1 BPW超低比特量化，低秩latent分解+二值化，验证了选题13(W4A4可行性)的极限探索方向
 - [**DuetServe**](https://arxiv.org/abs/2511.04791) (2025): 自适应intra-GPU P/D协调，为选题23(动态负载均衡)提供了新的设计空间

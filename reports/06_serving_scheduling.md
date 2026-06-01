@@ -71,7 +71,7 @@ graph LR
 
 ---
 
-## 2. Prefix Caching 技术演进
+## 2. Prefix caching 技术演进
 
 ### 2.1 问题定义
 
@@ -112,7 +112,7 @@ graph LR
 - **优势**: 解决 prefix caching 在 context 变化时的精度下降问题
 - **实验指标**: 相比完全 recompute 节省 2.2-3.3x 计算，精度损失 < 1%
 
-### 2.3 Prefix Caching 对比
+### 2.3 Prefix caching 对比
 
 | 方法 | 自动化程度 | 粒度 | 精度保证 | 适用场景 |
 |------|-----------|------|---------|---------|

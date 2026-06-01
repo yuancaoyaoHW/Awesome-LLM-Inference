@@ -79,7 +79,7 @@
 | Mini [vLLM](https://github.com/vllm-project/vllm) | L3 | Python, [PagedAttention](https://arxiv.org/abs/2309.06180) | 1×A100 | 理解 serving 架构 |
 | [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) | L3 | Scheduler 设计 | 1×A100 | 动态 batching |
 | Prefix Caching (Radix Tree) | L3 | 数据结构 | 1×A100 | Cache 管理 |
-| P/D Disaggregation | L4 | 分布式系统 | 4×A100 | 分离架构 |
+| P/D disaggregation | L4 | 分布式系统 | 4×A100 | 分离架构 |
 
 ---
 
@@ -161,8 +161,8 @@ graph TD
     KV --> SNAP[SnapKV/H2O<br/>1周]
     QUANT --> MARLIN[Marlin Kernel<br/>3周]
     
-    VLLM --> CB[Continuous Batching<br/>1周]
-    CB --> PD[P/D Disaggregation<br/>3周]
+    VLLM --> CB[Continuous batching<br/>1周]
+    CB --> PD[P/D disaggregation<br/>3周]
     
     style START fill:#f9f
     style VLLM fill:#9f9

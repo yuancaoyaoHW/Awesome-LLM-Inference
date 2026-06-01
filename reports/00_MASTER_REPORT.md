@@ -5,15 +5,73 @@
 
 ---
 
+## 如何阅读本报告集
+
+本报告集共 19 个文件，覆盖论文目录、技术分类、系统分析、数学推导、知识图谱、研究选题全链路。根据你的角色选择阅读路径：
+
+### 研究者路径（关注方法创新与前沿方向）
+1. `03_taxonomy.md` — 建立技术全景认知
+2. `05_kernel_and_math.md` — 理解核心算法数学基础
+3. `07_kv_cache.md` / `08_speculative_decoding.md` / `09_quantization.md` — 深入具体方向
+4. `13_contradictions_and_caveats.md` — 了解开放问题与矛盾
+5. `17_research_ideas.md` — 选择研究方向
+6. `16_reading_plan.md` — 制定论文阅读计划
+
+### 工程师路径（关注系统实现与部署）
+1. `01_repo_map.md` — 了解仓库结构与论文分布
+2. `06_serving_scheduling.md` — 理解 serving 系统设计
+3. `10_distributed_inference.md` — 掌握分布式推理方案
+4. `11_benchmark_map.md` — 了解性能评估方法
+5. `12_reproduction_plan.md` — 复现关键方法
+6. `16_reading_plan.md`（路线 A/F）— 系统方向论文阅读
+
+### 管理者路径（关注趋势判断与技术选型）
+1. `00_MASTER_REPORT.md`（本文件）— 全局综合分析与趋势预测
+2. `14_knowledge_graph.md` — 快速理解技术关系网络
+3. `15_presentation_outline.md` — 用于技术汇报
+4. `03_taxonomy.md`（仅看分类图）— 建立方向感
+
+---
+
+## 报告文件索引
+
+| 文件 | 用途 | 行数 |
+|------|------|------|
+| `00_MASTER_REPORT.md` | 主报告，全局综合分析 | 本文件 |
+| `01_repo_map.md` | 仓库概览，章节结构，论文统计 | 273 |
+| `02_paper_catalog.json` | 论文目录 JSON 格式 | 4493 |
+| `02_paper_catalog_enriched.json` | 论文目录增强版 JSON | 8477 |
+| `03_taxonomy.md` | 技术分类体系，8 大方向分类树 | 323 |
+| `04_systems_lineage.md` | 系统演进谱系 | 26 |
+| `05_kernel_and_math.md` | Attention Kernel 数学分析，复杂度公式，Roofline | 710 |
+| `06_serving_scheduling.md` | Serving 框架与调度策略分析 | 339 |
+| `07_kv_cache.md` | KV cache 全面分析，显存公式，压缩方法 | 483 |
+| `08_speculative_decoding.md` | Speculative decoding 方法分类与加速比分析 | 315 |
+| `09_quantization.md` | 量化技术深度分析，精度-效率 tradeoff | 562 |
+| `10_distributed_inference.md` | 分布式推理，TP/PP/EP/SP/CP 分析 | 375 |
+| `11_benchmark_map.md` | Benchmark 指标定义与系统对比 | 314 |
+| `12_reproduction_plan.md` | 关键方法复现路线与工程难点 | 181 |
+| `13_contradictions_and_caveats.md` | 矛盾、遗漏、不可比问题汇总 | 361 |
+| `14_knowledge_graph.md` | 知识图谱 Mermaid 格式 | 258 |
+| `14_knowledge_graph.json` | 知识图谱 JSON 格式（nodes + edges） | 162 |
+| `15_presentation_outline.md` | 90 分钟技术演讲大纲 | 197 |
+| `16_reading_plan.md` | 分级读论文路线（6 条路线） | 334 |
+| `17_research_ideas.md` | 55 条研究选题库 | 534 |
+| `18_evidence_matrix.md` | 证据矩阵 | 161 |
+
+**总计：21 个文件，覆盖论文目录、技术分类、系统分析、数学推导、知识图谱、研究选题全链路。**
+
+---
+
 ## Executive Summary
 
-本报告对 Awesome-LLM-Inference 仓库收录的 362 篇论文（2018.03–2026.03）进行了全面的技术体系分析。仓库覆盖 LLM 推理的 7 大核心方向：Attention Kernel 优化、KV Cache 管理、量化压缩、并行策略、调度与 Serving、解码加速、架构创新。
+本报告对 Awesome-LLM-Inference 仓库收录的 362 篇论文（2018.03–2026.03）进行了全面的技术体系分析。仓库覆盖 LLM 推理的 7 大核心方向：Attention Kernel 优化、KV cache 管理、量化压缩、并行策略、调度与 Serving、解码加速、架构创新。
 
 **核心发现**：
 
 1. **Attention Kernel 已进入成熟期**：FlashAttention 系列（1→2→3）奠定了 IO-aware tiling 的范式，后续工作主要在 sparse attention（SeerAttention, SpargeAttn）和低精度 attention（SageAttention FP4）方向探索增量改进。真正的突破点在于 decode 阶段的 split-K 并行（FlashDecoding）和 GQA/MLA 专用 kernel（FlashMLA）。
 
-2. **KV Cache 是当前最活跃的研究方向**：仓库中 54 篇论文（占比 15%）直接涉及 KV cache，涵盖量化（KVQuant, GEAR）、驱逐（H2O, SnapKV, AdaKV）、共享（RadixAttention, Hydragen）、压缩（Palu, MiniCache）四大子方向。DeepSeek-V3 的 MLA 从架构层面将 KV cache 压缩到 latent space，代表了根本性的解决思路。
+2. **KV cache 是当前最活跃的研究方向**：仓库中 54 篇论文（占比 15%）直接涉及 KV cache，涵盖量化（KVQuant, GEAR）、驱逐（H2O, SnapKV, AdaKV）、共享（RadixAttention, Hydragen）、压缩（Palu, MiniCache）四大子方向。DeepSeek-V3 的 MLA 从架构层面将 KV cache 压缩到 latent space，代表了根本性的解决思路。
 
 3. **Speculative Decoding 从理论走向工程**：Medusa/EAGLE 的多头方案已被 vLLM/SGLang 集成，MineDraft 解决了 batch 场景下的效率问题。核心瓶颈从"如何实现"转向"如何与 continuous batching 兼容"和"如何自适应调整 speculation length"。
 
@@ -43,7 +101,7 @@ mindmap
         INT-FlashAttention
       GQA/MQA/MLA
         FlashMLA
-    KV Cache
+    KV cache
       Quantization
         KVQuant
         GEAR
@@ -81,16 +139,16 @@ mindmap
       SP Ring/Star/Ulysses
       CP
     Serving
-      Continuous Batching
+      Continuous batching
         Orca
         vLLM
-      P/D Disaggregation
+      P/D disaggregation
         DistServe
         Mooncake
       Scheduling
         SJF
         SLO-aware
-      Prefix Caching
+      Prefix caching
         RadixAttention
         BatchLLM
     Decoding
@@ -125,7 +183,7 @@ mindmap
 - FP4 attention（SageAttention-3）是 Blackwell 时代的方向，但精度恢复策略尚未成熟
 - 关键公式：Standard Attention IO = O(N²d)，FlashAttention IO = O(N²d²/M)，其中 M 为 SRAM 大小
 
-### 2. KV Cache（54 篇）
+### 2. KV cache（54 篇）
 
 - 显存公式：`2 × L × n_kv_heads × d_h × seq_len × batch × bytes`
 - Llama-3-70B 在 128K context 下 KV cache = 20 GB（GQA 8 heads），DeepSeek-V3 仅 7.6 GB（MLA）
@@ -159,9 +217,9 @@ mindmap
 
 ### 6. Serving & Scheduling（11 篇 + 系统论文）
 
-- Continuous Batching（Orca → vLLM）是基础，所有现代框架均支持
-- P/D Disaggregation（DistServe, Mooncake）是大规模部署趋势
-- Prefix Caching（RadixAttention）对多轮对话和 RAG 场景至关重要
+- Continuous batching（Orca → vLLM）是基础，所有现代框架均支持
+- P/D disaggregation（DistServe, Mooncake）是大规模部署趋势
+- Prefix caching（RadixAttention）对多轮对话和 RAG 场景至关重要
 - SLO-aware scheduling 是生产环境的核心需求，但学术研究相对不足
 - 关键指标：TTFT（首 token 延迟）、TPOT（token 间延迟）、throughput（tokens/s）、SLO violation rate
 
@@ -220,32 +278,6 @@ mindmap
 
 ---
 
-## 报告文件索引
-
-| 文件 | 用途 | 行数 |
-|------|------|------|
-| `00_MASTER_REPORT.md` | 主报告，全局综合分析 | 本文件 |
-| `01_repo_map.md` | 仓库概览，章节结构，论文统计 | 479 |
-| `02_paper_catalog.csv` | 论文目录 CSV 格式 | 363 |
-| `02_paper_catalog.json` | 论文目录 JSON 格式 | 4493 |
-| `03_taxonomy.md` | 技术分类体系，7 大方向分类树 | 429 |
-| `04_systems_lineage.md` | 9 大系统演进谱系与对比 | 400 |
-| `05_kernel_and_math.md` | Attention Kernel 数学分析，复杂度公式，Roofline | 487 |
-| `06_serving_scheduling.md` | Serving 框架与调度策略分析 | 344 |
-| `07_kv_cache.md` | KV Cache 全面分析，显存公式，压缩方法 | 471 |
-| `08_speculative_decoding.md` | Speculative Decoding 方法分类与加速比分析 | 303 |
-| `09_quantization.md` | 量化技术深度分析，精度-效率 tradeoff | 550 |
-| `10_distributed_inference.md` | 分布式推理，TP/PP/EP/SP/CP 分析 | 364 |
-| `11_benchmark_map.md` | Benchmark 指标定义与系统对比 | 304 |
-| `12_reproduction_plan.md` | 关键方法复现路线与工程难点 | 171 |
-| `13_contradictions_and_caveats.md` | 矛盾、遗漏、不可比问题汇总 | 200 |
-| `14_knowledge_graph.md` | 知识图谱 Mermaid 格式 | 258 |
-| `14_knowledge_graph.json` | 知识图谱 JSON 格式（nodes + edges） | 162 |
-| `15_presentation_outline.md` | 60 分钟技术演讲大纲 | 162 |
-| `16_reading_plan.md` | 分级读论文路线（入门/进阶/专家） | 210 |
-| `17_research_ideas.md` | 55 条研究选题库 | 522 |
-
-**总计：20 个文件，覆盖论文目录、技术分类、系统分析、数学推导、知识图谱、研究选题全链路。**
 
 ---
 

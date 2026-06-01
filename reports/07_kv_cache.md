@@ -32,6 +32,53 @@ $$
 - $B$: batch size
 - bytes: 数据类型字节数（FP16=2, [FP8](https://arxiv.org/abs/2209.05433)=1, INT8=1, INT4=0.5）
 
+#### 各架构详细公式推导 [verified_by_paper]
+
+**MHA (Multi-Head Attention)：**
+
+$$
+\text{KV}_{\text{MHA}} = 2 \times L \times h \times d_h \times N \times B \times \text{bytes}
+$$
+
+每层每 token 存储 $h$ 个 K head + $h$ 个 V head，每个 head 维度 $d_h$。
+
+**GQA (Grouped-Query Attention)：**
+
+$$
+\text{KV}_{\text{GQA}} = 2 \times L \times g \times d_h \times N \times B \times \text{bytes}
+$$
+
+其中 $g = h / \text{group\_size}$ 为 KV head 数。相比 MHA 节省 $h/g$ 倍。
+
+**MQA (Multi-Query Attention)：**
+
+$$
+\text{KV}_{\text{MQA}} = 2 \times L \times 1 \times d_h \times N \times B \times \text{bytes}
+$$
+
+所有 Q head 共享 1 个 KV head，节省 $h$ 倍。
+
+**MLA (Multi-head Latent Attention, DeepSeek-V2/V3)：** [verified_by_paper]
+
+MLA 不存储完整 KV，而是存储压缩后的 latent vector：
+
+$$
+\text{KV}_{\text{MLA}} = L \times (d_c + d_{\text{rope}}) \times N \times B \times \text{bytes}
+$$
+
+其中 $d_c = 512$ 为 latent 压缩维度，$d_{\text{rope}}$ 为 RoPE 解耦维度（DeepSeek-V2: $d_{\text{rope}} = 64$）。注意 MLA 只需存储一份 latent（非 2 份 K+V），因为 K 和 V 均从同一 latent 解压。
+
+**对比推导（seq=4096, B=1, BF16）：** [derived_analysis]
+
+| 模型 | 架构 | 公式 | 结果 |
+|------|------|------|------|
+| Llama-2-7B | MHA (h=32) | $2 \times 32 \times 32 \times 128 \times 4096 \times 2$ | 2.0 GB |
+| Llama-3-70B | GQA (g=8) | $2 \times 80 \times 8 \times 128 \times 4096 \times 2$ | 1.28 GB |
+| Falcon-180B | MQA (g=1) | $2 \times 80 \times 1 \times 128 \times 4096 \times 2$ | 0.16 GB |
+| DeepSeek-V3 | MLA ($d_c$=512) | $61 \times 576 \times 4096 \times 2$ | 0.27 GB |
+
+MLA 相比 GQA-8 进一步节省约 **4.7x** 显存。
+
 ### 1.3 典型模型 KV Cache 大小
 
 | 模型 | L | $n_{\text{kv\_heads}}$ | $d_h$ | 每 token 每 batch (FP16) | 4K seq, B=1 | 128K seq, B=1 |
@@ -76,7 +123,7 @@ graph TD
 
 ---
 
-## 2. [KV Cache Compress](https://arxiv.org/abs/2305.17118)ion
+## 2. [KV Cache Compression](https://arxiv.org/abs/2305.17118)
 
 ### 2.1 Quantization 方法
 
@@ -249,6 +296,75 @@ $$
 | Channel-level | [KIVI](https://arxiv.org/abs/2402.02750) (key) | 适应 channel 分布 | kernel 实现复杂 |
 | Mixed | Gear, [FastGen](https://arxiv.org/abs/2310.01801) | 灵活，精度好 | 系统复杂度高 |
 
+### 2.5 Eviction 策略综合对比 [derived_analysis]
+
+| 方法 | 选择机制 | 时机 | 精度影响 (LongBench) | 压缩率 | 计算开销 |
+|------|----------|------|---------------------|--------|----------|
+| [StreamingLLM](https://arxiv.org/abs/2309.17453) | Sink + Sliding Window | 固定策略 | -15~30%（远距离任务） | 无限（固定窗口） | 无 |
+| [H2O](https://arxiv.org/abs/2306.14048) | 累积 attention score | 每步动态 | -1~5%（20% budget） | 5x | $O(N)$ per step |
+| [SnapKV](https://arxiv.org/abs/2404.14469) | Observation window pattern | Prefill 后一次性 | -0.5~2% | 5-10x | $O(N)$ 一次 |
+| [AdaKV](https://arxiv.org/abs/2407.11550) | Per-head 自适应 budget | Prefill 后 | -0.3~1.5% | 5-8x | $O(Nh)$ 一次 |
+| [PyramidKV](https://arxiv.org/abs/2406.02069) | 层级金字塔分配 | Prefill 后 | -0.5~2% | 5-8x | $O(NL)$ 一次 |
+
+**关键 insight：** [derived_analysis]
+- StreamingLLM 适合纯流式生成（聊天），不适合需要回溯的任务（RAG、summarization）
+- H2O 的动态更新在 decode 阶段引入 per-step 开销，高吞吐场景需权衡
+- SnapKV 一次性决策避免了 decode 开销，但无法适应 decode 过程中 attention pattern 的变化
+- AdaKV 的 per-head 自适应比 uniform budget 更优，因为不同 head 的稀疏度差异可达 10x
+
+### 2.6 KV Cache Quantization 精度-内存 Tradeoff [verified_by_paper]
+
+| 方法 | 有效 bit-width | 压缩率 | PPL 增加 (Llama-2-7B) | Kernel 支持 | 部署复杂度 |
+|------|---------------|--------|----------------------|-------------|------------|
+| [KIVI](https://arxiv.org/abs/2402.02750) 2-bit | 2 + scale | 7-8x | +0.3 | 需定制（per-channel K） | 中 |
+| [KVQuant](https://arxiv.org/abs/2401.18079) 3-bit NUQ | 3.2 | 5x | +0.1 | 需 codebook lookup | 高 |
+| [Gear](https://arxiv.org/abs/2403.05527) 2-bit+LR | 2.5 | 6x | +0.2 | 三组件解压 | 高 |
+| FP8 KV (native) | 8 | 2x | <+0.05 | 硬件原生 (H100+) | 低 |
+| INT4 KV ([QServe](https://arxiv.org/abs/2405.04532)) | 4 | 4x | +0.1-0.2 | FlashInfer 支持 | 中 |
+
+**精度-内存 Pareto 前沿：** [derived_analysis]
+- 2x 压缩（FP8）：几乎无损，推荐 H100+ 默认开启
+- 4x 压缩（INT4）：轻微损失，适合长上下文 + 大 batch 场景
+- 6-8x 压缩（2-3 bit）：需要任务评估，适合显存极度受限场景
+
+### 2.7 Offload 策略分析 [derived_analysis]
+
+#### CPU Offload
+
+**延迟模型：**
+
+$$
+T_{\text{offload}} = \frac{\text{KV\_size\_per\_layer}}{BW_{\text{PCIe}}} + T_{\text{overhead}}
+$$
+
+| 配置 | KV/layer (4K seq, B=1) | PCIe 带宽 | 传输时间 | 可行性 |
+|------|------------------------|-----------|----------|--------|
+| Llama-7B, FP16 | 32MB | Gen4: 32 GB/s | 1.0 ms | 可 overlap |
+| Llama-70B, FP16 | 16MB (GQA) | Gen4: 32 GB/s | 0.5 ms | 可 overlap |
+| Llama-7B, 128K seq | 1 GB | Gen4: 32 GB/s | 31 ms | 需 prefetch |
+| Llama-7B, FP16, 128K | 1 GB | Gen5: 64 GB/s | 16 ms | 需 prefetch |
+
+**Prefetch 策略（InfiniGen 方法）：** [verified_by_paper]
+1. 用当前层的 hidden state 预测下一层需要的 KV entries
+2. 在当前层计算时异步 prefetch 下一层的 important KV
+3. 只 prefetch top-k important entries（通常 10-30%），其余丢弃或用近似
+
+#### NVMe Offload
+
+$$
+T_{\text{NVMe}} = \frac{\text{KV\_size}}{BW_{\text{NVMe}}} \approx \frac{\text{KV\_size}}{7 \text{ GB/s (Gen4 x4)}}
+$$
+
+NVMe 带宽约为 PCIe 的 1/4-1/5，适合冷数据存储（如 prefix cache 的 LRU eviction tier）。
+
+#### 多级存储架构 [derived_analysis]
+
+```
+GPU HBM (热) → CPU DRAM (温) → NVMe SSD (冷)
+  2 TB/s         32 GB/s          7 GB/s
+  80 GB          512+ GB          数 TB
+```
+
 ---
 
 ## 3. KV Cache Scheduling
@@ -290,6 +406,27 @@ graph LR
 - 按需分配（序列增长时才分配新 block）
 - 内存利用率接近 100%（vs naive 预分配的 ~50%）
 
+#### Block Size Tradeoff 分析 [derived_analysis]
+
+| Block Size (tokens) | 内部碎片 | Block Table 开销 | Kernel 效率 | 适用场景 |
+|---------------------|----------|-----------------|-------------|----------|
+| 1 | 0（无碎片） | 极大（每 token 一条映射） | 差（gather 频繁） | 不实用 |
+| 8 | 平均 4 tokens | 中 | 中 | 短序列 |
+| 16 (vLLM 默认) | 平均 8 tokens | 小 | 好 | 通用 |
+| 32 | 平均 16 tokens | 极小 | 最好（对齐 warp） | 长序列 |
+| 64 | 平均 32 tokens | 极小 | 最好 | 超长序列 |
+
+**内部碎片公式：**
+
+$$
+\text{Fragmentation} = \frac{\text{block\_size} - 1}{2} \times \text{per\_token\_kv\_size} \times B
+$$
+
+**选择准则：** [derived_analysis]
+- block_size 应为 warp size (32) 的因子或倍数，确保 coalesced memory access
+- 短序列多的场景用小 block（减少碎片），长序列用大 block（减少 table 开销和提升 kernel 效率）
+- SGLang 使用 block_size=1 的 token-level paging（RadixAttention 需要任意前缀匹配）
+
 ### 3.2 Preemption 策略
 
 当 GPU 显存不足时，[vLLM](https://github.com/vllm-project/vllm) 支持两种 preemption：
@@ -305,7 +442,7 @@ Llama-7B, 4K context, FP16: KV cache = 2 GB
 PCIe Gen4 x16: 32 GB/s
 Swap out time: 2 / 32 = 62.5 ms
 
-### 3.3 Prefix Caching
+### 3.3 Prefix caching
 
 **场景：** 多个请求共享相同的 system prompt 或 few-shot examples。
 
@@ -315,6 +452,26 @@ Swap out time: 2 / 32 = 62.5 ms
 - Reference counting 管理生命周期
 
 **节省：** 对于 2K system prompt + 2K user input，prefix caching 节省 50% 的 prefill 计算和 KV 存储。
+
+#### Prefix Sharing 机制详解 [verified_by_paper]
+
+**RadixAttention (SGLang)：** 使用 Radix Tree（压缩前缀树）管理 KV cache：
+- 节点存储 token 序列对应的 KV cache blocks
+- 支持任意前缀长度的匹配（不限于 block 边界）
+- LRU eviction 策略管理缓存容量
+
+**APC (Automatic Prefix Caching, vLLM)：** 基于 hash 的 block-level 匹配：
+- 对每个 block 的 token 内容计算 hash（包含前缀 hash 链）
+- Hash 匹配即可复用物理 block
+- 粒度为 block_size（通常 16 tokens），无法匹配非对齐前缀
+
+**Hash-based Matching 对比：** [derived_analysis]
+
+| 机制 | 匹配粒度 | 查找复杂度 | 适用场景 | 实现 |
+|------|----------|-----------|----------|------|
+| RadixAttention | Token-level | $O(L)$ | 多轮对话、共享前缀 | SGLang |
+| APC (hash) | Block-level | $O(1)$ per block | System prompt 共享 | vLLM |
+| Content-hash | Chunk-level | $O(1)$ | 跨请求去重 | Mooncake |
 
 ### 3.4 Copy-on-Write (Beam Search)
 
@@ -357,6 +514,36 @@ graph TB
 - Chunk-level pipeline: prefill 产生的 KV chunk 立即可被 decode 使用
 
 **带宽需求：** Llama-70B, 4K context, FP16: 20 GB KV cache。RDMA 200 Gbps (25 GB/s) 下传输时间 = 0.8s。
+
+#### 3.5.3 跨节点 KV Transfer 分析（P/D disaggregation）[derived_analysis]
+
+**带宽需求公式：**
+
+$$
+T_{\text{transfer}} = \frac{2 \times L \times n_{\text{kv}} \times d_h \times N \times \text{bytes}}{BW_{\text{network}}}
+$$
+
+**各模型 KV 传输延迟（4K seq, B=1, BF16）：**
+
+| 模型 | KV Size | RDMA 200Gbps | RDMA 400Gbps | NVLink (900GB/s) |
+|------|---------|--------------|--------------|------------------|
+| Llama-3-8B (GQA-8) | 0.5 GB | 200 ms | 100 ms | 0.6 ms |
+| Llama-3-70B (GQA-8) | 1.28 GB | 512 ms | 256 ms | 1.4 ms |
+| DeepSeek-V3 (MLA) | 0.27 GB | 108 ms | 54 ms | 0.3 ms |
+
+**降低传输延迟的策略：** [verified_by_paper]
+1. **KV 压缩传输：** 传输前量化为 FP8/INT4，减少 2-4x 数据量
+2. **Chunk-level pipeline：** Prefill 每产生一个 chunk 的 KV 立即传输，与后续 prefill 计算 overlap
+3. **选择性传输：** 只传输 important KV entries（结合 SnapKV/H2O），减少 50-80% 传输量
+4. **MLA 优势：** DeepSeek-V3 的 MLA 天然压缩 KV，传输量仅为 GQA 的 1/5
+
+**Chunk Pipeline 延迟模型：** [derived_analysis]
+
+$$
+T_{\text{total}} = T_{\text{first\_chunk}} + (N_{\text{chunks}} - 1) \times \max(T_{\text{compute\_chunk}}, T_{\text{transfer\_chunk}})
+$$
+
+当 $T_{\text{compute}} > T_{\text{transfer}}$ 时，传输完全被计算隐藏。
 
 #### 3.5.2 [InfiniGen](https://arxiv.org/abs/2406.19707) (Lee et al., 2024)
 
@@ -429,7 +616,7 @@ $$
 | 方法 | 核心机制 | 吞吐提升 | 延迟影响 | 适用规模 |
 |------|----------|----------|----------|----------|
 | [vLLM](https://github.com/vllm-project/vllm) [PagedAttention](https://arxiv.org/abs/2309.06180) | Block paging | 2-4x | 无 | 单机多卡 |
-| Prefix Caching | Hash-based sharing | 1.5-3x (共享场景) | 降低 TTFT | 单机/多机 |
+| Prefix caching | Hash-based sharing | 1.5-3x (共享场景) | 降低 TTFT | 单机/多机 |
 | [Mooncake](https://arxiv.org/abs/2407.00079) | P/D 分离 + RDMA | 2-5x | 增加 TTFT | 大规模集群 |
 | [InfiniGen](https://arxiv.org/abs/2406.19707) | CPU offload + prefetch | 支持更长上下文 | 略增 | 单机 |
 | [MemServe](https://arxiv.org/abs/2406.17565) | 跨请求复用 | 1.5-2x | 降低 TTFT | 多机 |

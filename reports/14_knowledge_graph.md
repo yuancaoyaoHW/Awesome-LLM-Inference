@@ -36,10 +36,10 @@ graph TD
     end
     
     subgraph "调度层"
-        CB[Continuous Batching]
-        PD[P/D Disaggregation]
+        CB[Continuous batching]
+        PD[P/D disaggregation]
         SPEC[Speculative Decoding]
-        PREFIX[Prefix Caching]
+        PREFIX[Prefix caching]
     end
     
     TRANSFORMER --> MHA
@@ -116,12 +116,12 @@ graph LR
     end
     
     subgraph "解决方法"
-        S1[KV Cache 压缩]
+        S1[KV cache 压缩]
         S2[量化]
         S3[FlashAttention]
         S4[Speculative Decoding]
-        S5[Continuous Batching]
-        S6[P/D Disaggregation]
+        S5[Continuous batching]
+        S6[P/D disaggregation]
         S7[Sparse Attention]
         S8[Offloading]
         S9[Sequence Parallelism]
@@ -235,12 +235,12 @@ graph TD
 
 | 领域 A | 领域 B | 交叉点 | 代表工作 |
 |--------|--------|--------|----------|
-| Attention | Memory | KV Cache 管理 | [PagedAttention](https://arxiv.org/abs/2309.06180), H2O |
+| Attention | Memory | KV cache 管理 | [PagedAttention](https://arxiv.org/abs/2309.06180), H2O |
 | Quantization | Serving | 量化模型 serving | [QServe](https://arxiv.org/abs/2405.04532), Marlin |
 | Speculation | Batching | Batch-aware speculation | [MineDraft](https://arxiv.org/abs/2603.18016) |
 | Sparse | Long Context | 稀疏长序列 attention | [MInference](https://arxiv.org/abs/2407.02490), [StreamingLLM](https://arxiv.org/abs/2309.17453) |
 | [MoE](https://arxiv.org/abs/2407.06204) | Distributed | Expert parallelism | [DeepSeek-V3](https://arxiv.org/abs/2412.19437) |
-| Compression | KV Cache | KV 量化/蒸馏 | [KIVI](https://arxiv.org/abs/2402.02750), Gear |
+| Compression | KV cache | KV 量化/蒸馏 | [KIVI](https://arxiv.org/abs/2402.02750), Gear |
 | Scheduling | Disaggregation | P/D 调度 | [DistServe](https://arxiv.org/abs/2401.09670), [Mooncake](https://github.com/kvcache-ai/Mooncake) |
 | Hardware | Kernel | 硬件感知 kernel | [FlashAttention-3](https://arxiv.org/abs/2407.08608) (FP8) |
 
@@ -249,9 +249,9 @@ graph TD
 | 方向 | 2022 | 2023 | 2024 | 2025 | 趋势 |
 |------|------|------|------|------|------|
 | [FlashAttention](https://arxiv.org/abs/2205.14135) | ★★ | ★★★ | ★★ | ★ | 成熟，增量改进 |
-| KV Cache | ★ | ★★ | ★★★★ | ★★★ | 持续热门 |
+| KV cache | ★ | ★★ | ★★★★ | ★★★ | 持续热门 |
 | [Speculative Decoding](https://arxiv.org/abs/2211.17192) | ★ | ★★ | ★★★ | ★★ | 稳定 |
-| P/D Disaggregation | - | - | ★★★ | ★★★★ | 快速增长 |
+| P/D disaggregation | - | - | ★★★ | ★★★★ | 快速增长 |
 | MLA/DeepSeek | - | - | ★★★ | ★★★★ | 快速增长 |
 | Long Context | - | ★ | ★★★ | ★★★★ | 快速增长 |
 | [MoE Inference](https://arxiv.org/abs/2404.02852) | - | ★ | ★★ | ★★★ | 增长 |

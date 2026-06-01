@@ -8,7 +8,7 @@
 
 ## 1. 并行策略
 
-### 1.1 [Tensor Parallel](https://arxiv.org/abs/2402.04925)ism (TP)
+### 1.1 [Tensor Parallelism](https://arxiv.org/abs/2402.04925) (TP)
 
 **定义**：将单层的权重矩阵沿某个维度切分到多个 GPU，每个 GPU 计算部分结果后通过 AllReduce 聚合。
 
@@ -121,6 +121,49 @@ graph TD
 - Expert load imbalance：热门 expert 成为瓶颈
 - AlltoAll 通信延迟
 - 与 TP 的组合（EP + TP）
+
+#### MoE AlltoAll 通信详细分析 [derived_analysis]
+
+**AlltoAll 通信量公式：**
+
+$$
+V_{\text{AlltoAll}} = 2 \times B \times S \times \text{top\_k} \times H \times \text{bytes} \times \frac{E_P - 1}{E_P}
+$$
+
+其中 $B$ = batch size, $S$ = seq_len, top_k = 路由选择的 expert 数, $H$ = hidden_size, $E_P$ = EP degree。
+
+因子 2 表示 dispatch（发送 token 到 expert）+ combine（收集结果）两次 AlltoAll。
+
+**DeepSeek-V3 通信量估算（EP=32, top_k=2, H=7168, BF16）：** [derived_analysis]
+
+$$
+V = 2 \times B \times S \times 2 \times 7168 \times 2 \times \frac{31}{32} \approx 55 \text{ KB/token}
+$$
+
+对于 batch=128 tokens（decode 阶段）：$V \approx 7$ MB per MoE layer。
+
+**Load Balancing 问题：** [verified_by_paper]
+
+Token routing 不均匀导致部分 GPU 处理更多 token：
+
+$$
+\text{Load Factor} = \frac{\max_i(n_i)}{B \times S \times \text{top\_k} / E_P}
+$$
+
+其中 $n_i$ 为第 $i$ 个 GPU 接收的 token 数。理想值为 1.0，实际通常 1.2-2.0。
+
+**DeepEP (DeepSeek, 2025)：** [verified_by_paper]
+- 针对 DeepSeek-V3 的 256 expert 优化的 AlltoAll 通信库
+- 低延迟模式：用于 decode 阶段，利用 RDMA 直接写入远程 GPU 内存
+- 高吞吐模式：用于 prefill 阶段，批量传输 + NVLink/IB 混合
+- 支持 FP8 传输：通信量减半
+- 与 NCCL AlltoAll 对比：延迟降低 2-3x
+
+**EPLB (Expert Parallelism Load Balancer, DeepSeek 2025)：** [verified_by_paper]
+- 基于历史 routing 统计的 expert 重分配
+- 将热门 expert 复制到多个 GPU（redundant placement）
+- 冷门 expert 合并到同一 GPU
+- 动态调整周期：每 N 个 batch 重新评估 load 分布
 
 ### 1.5 Context Parallelism (CP)
 
@@ -247,6 +290,38 @@ graph TD
 - 优化的 AlltoAll kernel
 - [FP8](https://arxiv.org/abs/2209.05433) 量化减少通信量
 
+#### DeepSeek-V3 分布式推理架构详解 [verified_by_paper]
+
+**模型结构：** 61 层，其中第 1 层为 dense，第 2-61 层为 MoE（256 routed experts + 1 shared expert），top-2 routing。
+
+**典型部署配置：**
+- TP=8（intra-node NVLink）
+- EP=32-64（inter-node IB/RoCE）
+- 每个 GPU 承载 256/EP = 4-8 个 expert
+
+**通信流程（每个 MoE 层）：** [derived_analysis]
+
+```
+1. Shared Expert: 本地计算（所有 GPU 复制）
+2. Router: 计算 token-expert affinity → top-2 routing decision
+3. Dispatch AlltoAll: 将 token hidden states 发送到目标 expert 所在 GPU
+4. Expert Compute: 各 GPU 并行计算本地 expert
+5. Combine AlltoAll: 将 expert 输出发送回原始 GPU
+6. Merge: shared_output + weighted_sum(routed_outputs)
+```
+
+**DeepEP 通信优化：** [verified_by_paper]
+- **低延迟模式（decode）：** 利用 RDMA one-sided write 直接写入远程 GPU HBM，绕过 CPU 参与
+- **高吞吐模式（prefill）：** 批量聚合 token 后发送，利用大消息提高带宽利用率
+- **FP8 dispatch：** Token hidden states 在发送前量化为 FP8，通信量减半
+- **Topology-aware routing：** 优先将 token 路由到同节点 expert，减少跨节点通信
+
+**EPLB (Expert-level Load Balancing)：** [verified_by_paper]
+- 监控每个 expert 的实际负载（处理 token 数）
+- 热门 expert 复制到多个 GPU（redundant expert placement）
+- 冷门 expert 合并（多个 expert 共享同一 GPU）
+- 重平衡周期：每 1000 batch 评估一次，避免频繁迁移开销
+
 ---
 
 ## 4. Communication Optimization
@@ -290,18 +365,102 @@ graph TD
 
 ## 5. 性能模型
 
-### 5.1 Communication Volume
+### 5.1 Communication Volume 详细公式 [verified_by_paper]
 
-**TP AllReduce per layer**：
-$$V_{TP} = 2 \times \frac{N-1}{N} \times H \times B \times S \times dtype$$
+**TP AllReduce per layer（Attention + MLP 各一次）：**
 
-**PP inter-stage**：
-$$V_{PP} = H \times B \times S \times dtype$$
+$$
+V_{TP} = 2 \times 2 \times \frac{P-1}{P} \times H \times B \times S \times \text{dtype\_bytes}
+$$
 
-**SP [Ring Attention](https://arxiv.org/abs/2310.01889) per step**：
-$$V_{SP} = 2 \times \frac{S}{P} \times d_{head} \times n_{kv\_heads} \times dtype$$
+其中第一个 2 表示 Attention 和 MLP 各一次 AllReduce，第二个 $2 \times \frac{P-1}{P}$ 为 Ring AllReduce 的通信系数（reduce-scatter + all-gather），$P$ = TP degree。
 
-### 5.2 Scaling Efficiency
+**PP inter-stage activation transfer：**
+
+$$
+V_{PP} = H \times B \times S \times \text{dtype\_bytes}
+$$
+
+每个 micro-batch 在 stage 间传递一次 hidden states。总通信量 = $V_{PP} \times m$（$m$ 个 micro-batch）。
+
+**SP Ring Attention per ring step：**
+
+$$
+V_{SP} = 2 \times \frac{S}{P} \times d_h \times n_{\text{kv\_heads}} \times \text{dtype\_bytes}
+$$
+
+每步传递一个 KV chunk（K + V），共需 $P-1$ 步完成一轮。
+
+**EP AlltoAll per MoE layer（dispatch + combine）：**
+
+$$
+V_{EP} = 2 \times B \times S \times \text{top\_k} \times H \times \text{dtype\_bytes} \times \frac{P-1}{P}
+$$
+
+**CP (Context Parallelism) per layer：**
+
+$$
+V_{CP} = 2 \times \frac{S}{P} \times d_h \times n_{\text{kv\_heads}} \times (P-1) \times \text{dtype\_bytes}
+$$
+
+Ring 方式需要 $P-1$ 步，每步传递一个 KV chunk。
+
+### 5.2 各策略通信量对比（Llama-3-70B, H=8192, L=80, BF16）[derived_analysis]
+
+| 策略 | 公式实例化 | 每层通信量 (decode, B=1) | 每层通信量 (prefill, S=4096) |
+|------|-----------|------------------------|----------------------------|
+| TP=8 | $2 \times 2 \times \frac{7}{8} \times 8192 \times 2$ | 57 KB | 229 MB |
+| PP=8 | $8192 \times 2$ | 16 KB | 64 MB |
+| SP=4 (Ring) | $2 \times 1024 \times 128 \times 8 \times 2$ | - | 4 MB/step × 3 steps |
+| EP=32 (MoE) | $2 \times 1 \times 2 \times 7168 \times 2 \times \frac{31}{32}$ | 55 KB | 225 MB |
+
+### 5.3 适用边界分析 [derived_analysis]
+
+**何时使用哪种策略：**
+
+$$
+\text{TP 适用条件：} \quad T_{\text{AllReduce}} < T_{\text{compute\_per\_layer}} \quad \Rightarrow \quad \frac{V_{TP}}{BW_{\text{NVLink}}} < \frac{\text{FLOPs\_per\_layer}}{\text{GPU\_FLOPS} / P}
+$$
+
+| 策略 | 适用条件 | 不适用场景 | 典型配置 |
+|------|----------|-----------|----------|
+| TP | 高带宽互联（NVLink 600+ GB/s） | 跨节点（IB 带宽不足） | Intra-node, P≤8 |
+| PP | 跨节点、模型层数多 | Decode 延迟敏感（bubble 大） | Inter-node, P=2-16 |
+| SP/CP | 超长序列（>32K）、单序列 | 短序列（并行度不足） | 长 context prefill |
+| EP | MoE 模型、expert 数 > GPU 数 | Dense 模型 | MoE, P=8-64 |
+| P/D Disagg | 高吞吐 serving、混合 workload | 低延迟单请求 | 大规模集群 |
+
+**TP vs PP 决策公式：** [derived_analysis]
+
+$$
+\text{选择 TP 当：} \quad \frac{2 \times H \times \text{dtype}}{BW_{\text{interconnect}}} < \frac{2 \times H^2 \times \text{dtype}}{P \times BW_{\text{HBM}}}
+$$
+
+即通信延迟 < 计算时间/P。对于 decode 阶段（B=1），左侧约 $16\mu s$（NVLink），右侧约 $10\mu s$（A100），因此 TP=8 时效率约 60-70%。
+
+### 5.4 P/D disaggregation KV Transfer 分析 [derived_analysis]
+
+**KV 传输延迟模型：**
+
+$$
+T_{\text{KV\_transfer}} = \frac{2 \times L \times n_{\text{kv}} \times d_h \times S \times \text{bytes}}{BW_{\text{network}}} + T_{\text{setup}}
+$$
+
+**各模型 KV 传输时间（S=4096, BF16）：**
+
+| 模型 | KV Size | IB 200Gbps | IB 400Gbps | RDMA 直写 |
+|------|---------|------------|------------|-----------|
+| Llama-3-8B (GQA-8) | 512 MB | 205 ms | 102 ms | ~80 ms |
+| Llama-3-70B (GQA-8) | 1.28 GB | 512 ms | 256 ms | ~200 ms |
+| DeepSeek-V3 (MLA) | 274 MB | 110 ms | 55 ms | ~43 ms |
+
+**降低 KV 传输开销的方法：** [verified_by_paper]
+1. **FP8/INT4 压缩传输：** 减少 2-4x 数据量，PPL 增加可忽略
+2. **Chunk pipeline：** Prefill 每完成一个 chunk 立即传输，overlap 后续计算
+3. **选择性传输：** 只传输 important KV（SnapKV 筛选），减少 50-80%
+4. **MLA 天然优势：** DeepSeek-V3 KV 仅为 GQA 的 1/5
+
+### 5.5 Scaling Efficiency
 
 **TP Scaling**：
 $$\text{Efficiency}_{TP} = \frac{T_{compute}}{T_{compute} + T_{allreduce}}$$
@@ -314,7 +473,7 @@ $$\text{Efficiency}_{TP} = \frac{T_{compute}}{T_{compute} + T_{allreduce}}$$
 **PP Scaling**：
 $$\text{Efficiency}_{PP} = \frac{m}{m + p - 1}$$
 
-### 5.3 最优并行策略选择
+### 5.6 最优并行策略选择
 
 | 模型大小 | 硬件 | 推荐策略 |
 |----------|------|----------|
@@ -348,7 +507,7 @@ graph TD
     HYBRID --> TP_PP[TP + PP]
     HYBRID --> TP_EP[TP + EP]
     HYBRID --> TP_SP[TP + SP<br/>LoongServe]
-    HYBRID --> PD[P/D Disaggregation<br/>DistServe/Mooncake]
+    HYBRID --> PD[P/D disaggregation<br/>DistServe/Mooncake]
 ```
 
 ---

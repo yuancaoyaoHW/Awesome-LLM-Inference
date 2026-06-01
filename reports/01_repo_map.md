@@ -78,7 +78,7 @@
 |--------|----------|----------|
 | [SeerAttention](https://arxiv.org/abs/2410.13276) | IO/FLOPs-Aware/Sparse Attention | ⭐️⭐️⭐️ |
 | OpenMchine | IO/FLOPs-Aware/Sparse Attention | ⭐️⭐️⭐️ |
-| [OneComp](https://arxiv.org/abs/2603.28845)ression | Trending LLM/VLM Topics | ⭐️⭐️ |
+| [OneCompression](https://arxiv.org/abs/2603.28845) | Trending LLM/VLM Topics | ⭐️⭐️ |
 | [Open-Sora](https://github.com/hpcaitech/Open-Sora/blob/main/README.md) | Trending LLM/VLM Topics | ⭐️⭐️ |
 | [Open-Sora](https://github.com/hpcaitech/Open-Sora/blob/main/README.md)-Plan | Trending LLM/VLM Topics | ⭐️⭐️ |
 | [DeepSeek-V2](https://arxiv.org/abs/2405.04434) | Trending LLM/VLM Topics | ⭐️⭐️ |
@@ -259,7 +259,7 @@ graph TD
     D --> D2[IO/FLOPs-Aware/Sparse Attention]
     D --> D3[KV Cache Scheduling/Quantize]
     D --> D4[Prompt/Context Compression]
-    D --> D5[Long Context Attention/KV Cache]
+    D --> D5[Long Context Attention/KV cache]
 
     E --> E1[Early-Exit/Intermediate Layer]
     E --> E2[Parallel Decoding/Sampling]

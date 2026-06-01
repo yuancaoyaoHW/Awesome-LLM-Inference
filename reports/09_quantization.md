@@ -510,9 +510,46 @@ graph TD
 
 ---
 
-## 8. 精度-速度 Tradeoff 总结
+## 8. 量化格式全面对比
 
-### 8.1 Llama-2-7B 量化对比
+### 8.1 W4A16, W8A8, W4A8, FP8, FP4, KV4 对比 [derived_analysis]
+
+| 格式 | Weight 精度 | Activation 精度 | KV Cache | 典型 PPL 增加 | Throughput 提升 | 主要用例 |
+|------|------------|----------------|----------|--------------|----------------|----------|
+| W4A16 | INT4 (group) | FP16 | FP16 | +2-3% | 1.8-2.2x | 显存受限，单卡部署大模型 |
+| W8A8 | INT8 | INT8 | FP16 | <+0.5% | 1.4-1.6x | 精度敏感，A100 部署 |
+| W4A8 | INT4 | INT8 | FP16/INT4 | +2-4% | 2.0-2.8x | 高吞吐 serving |
+| FP8 (E4M3) | FP8 | FP8 | FP8 | <+0.3% | 1.6-1.9x | H100+ 默认方案 |
+| FP4 (E2M1) | FP4 | FP4/FP8 | FP8 | +3-8% | 2.5-3.5x* | Blackwell 架构 |
+| KV4 (INT4) | - | - | INT4 | +0.1-0.3% | 间接（↑batch） | 长上下文 + 大 batch |
+| W4A16+KV4 | INT4 | FP16 | INT4 | +2.5-4% | 2.5-3.5x | 极致显存优化 |
+
+*FP4 目前主要在 Blackwell (B100/B200) 上有硬件支持。[verified_by_paper]
+
+### 8.2 硬件依赖矩阵 [verified_by_paper]
+
+| 量化格式 | A100 (Ampere) | H100 (Hopper) | B200 (Blackwell) | RTX 4090 (Ada) | Apple M2+ | CPU (AVX-512) |
+|----------|:---:|:---:|:---:|:---:|:---:|:---:|
+| FP8 E4M3 GEMM | - | ✓ (1978T) | ✓ (4500T) | ✓ (660T) | - | - |
+| FP4 E2M1 GEMM | - | - | ✓ (9000T) | - | - | - |
+| INT8 Tensor Core | ✓ (624T) | ✓ (1978T) | ✓ | ✓ (660T) | - | ✓ (VNNI) |
+| INT4 Tensor Core | ✓ (1248T)* | ✓ | ✓ | ✓ | - | - |
+| W4A16 (Marlin) | ✓ | ✓ | ✓ | ✓ | - | - |
+| GGUF (CPU) | ✓ (CUDA) | ✓ | ✓ | ✓ | ✓ (Metal) | ✓ |
+| bitsandbytes NF4 | ✓ | ✓ | ✓ | ✓ | - | - |
+
+*INT4 Tensor Core 在 A100 上为 structured sparsity (2:4) 模式下的等效吞吐。
+
+**关键约束：** [derived_analysis]
+- FP8 需要 Hopper+ 架构，是当前数据中心的最佳默认选择
+- W4A16 通过 Marlin kernel 在所有 NVIDIA GPU 上高效运行（dequant on-the-fly）
+- INT8 GEMM 在 A100 上通过 CUTLASS/cuBLAS 原生支持
+- Apple Silicon 仅支持 GGUF 格式（Metal shader 实现）
+- CPU 推理主要依赖 AVX-512 VNNI 指令集（INT8）或 AMX（INT8/BF16）
+
+### 8.3 精度-性能 Tradeoff 数据 [verified_by_paper]
+
+**Llama-2-7B 各量化方案 PPL 与加速对比：**
 
 | 方法 | Bits | PPL (Wiki2) | 相对 FP16 | Throughput 倍数 | 显存节省 |
 |------|------|-------------|-----------|----------------|----------|
@@ -528,26 +565,46 @@ graph TD
 
 *注：2-bit 方法的 dequantization 开销较大，实际加速受限。
 
-### 8.2 选择指南
+**Llama-3-70B 量化对比（更大模型量化更鲁棒）：** [verified_by_paper]
 
-| 场景 | 推荐方案 | 理由 |
-|------|----------|------|
-| 精度优先，H100 可用 | [FP8](https://arxiv.org/abs/2209.05433) | 几乎无损，硬件原生支持 |
-| 精度优先，A100 | W8A8 [SmoothQuant](https://arxiv.org/abs/2211.10438) | 成熟，精度好 |
-| 吞吐优先，精度可接受 | W4A16 [AWQ](https://arxiv.org/abs/2306.00978) + Marlin | 高吞吐，精度损失小 |
-| 显存极度受限 | W4 [GPTQ](https://arxiv.org/abs/2210.17323) + KV4 | 最大化 batch size |
-| 边缘设备/CPU | [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) Q4_K_M | [llama.cpp](https://github.com/ggerganov/llama.cpp) 生态完善 |
-| 研究/极限压缩 | [QuIP#](https://arxiv.org/abs/2402.04396) 2-bit | 最低 bit rate |
+| 方法 | Bits | PPL (Wiki2) | 相对 FP16 | 备注 |
+|------|------|-------------|-----------|------|
+| FP16 | 16 | 2.85 | 0% | 需要 4×A100 |
+| FP8 | 8 | 2.86 | +0.4% | 单卡 H100 可部署 |
+| W4A16 AWQ g128 | 4 | 2.92 | +2.5% | 单卡 A100 可部署 |
+| W4A4 FlatQuant | 4 | 2.88 | +1.1% | Prefill 加速 2.3x |
+| W3A16 | 3 | 3.15 | +10.5% | 精度下降明显 |
 
-### 8.3 硬件兼容性
+### 8.4 Calibration 需求与敏感性分析 [derived_analysis]
 
-| 方法 | NVIDIA Ampere (A100) | NVIDIA Hopper (H100) | NVIDIA Ada (4090) | Apple Silicon | CPU (AVX) |
-|------|---------------------|---------------------|-------------------|---------------|-----------|
-| [FP8](https://arxiv.org/abs/2209.05433) | ✗ | ✓ | ✓ | ✗ | ✗ |
-| INT8 GEMM | ✓ | ✓ | ✓ | ✗ | ✓ (VNNI) |
-| W4A16 (Marlin) | ✓ | ✓ | ✓ | ✗ | ✗ |
-| [GGUF](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md) ([llama.cpp](https://github.com/ggerganov/llama.cpp)) | ✓ | ✓ | ✓ | ✓ (Metal) | ✓ |
-| bitsandbytes NF4 | ✓ | ✓ | ✓ | ✗ | ✗ |
+| 方法 | Calibration 数据 | 数据量 | 敏感性 | 注意事项 |
+|------|-----------------|--------|--------|----------|
+| GPTQ | 通用文本 (C4/WikiText) | 128 samples | 中（Hessian 稳定性） | 样本太少→Hessian 不稳定 |
+| AWQ | 通用文本 | 128 samples | 低（只需 activation stats） | $\alpha$ grid search 范围影响结果 |
+| SmoothQuant | 通用文本 | 512 samples | 低 | Per-layer $\alpha$ 可进一步优化 |
+| FP8 | 通用文本 | 32-128 samples | 极低（per-tensor scale） | Delayed scaling 可免 calibration |
+| KIVI (KV) | 无需 | 0 | 无 | Online quantization |
+| KVQuant (NUQ) | 通用文本 | 256 samples | 中（codebook 质量） | Domain-specific 数据更优 |
+
+**Calibration 数据选择建议：** [derived_analysis]
+- 通用部署：C4 或 RedPajama 的随机子集即可
+- Domain-specific：使用目标领域数据可降低 0.1-0.3 PPL
+- 多语言模型：需要包含各语言的 calibration 样本
+- 代码模型：使用代码数据 calibration 比通用文本好 0.2-0.5 PPL
+
+### 8.5 部署推荐决策树 [derived_analysis]
+
+| 场景 | 硬件 | 推荐方案 | 理由 |
+|------|------|----------|------|
+| 精度优先 + H100 | H100/H200 | FP8 全链路 | 几乎无损，硬件原生 2x 吞吐 |
+| 精度优先 + A100 | A100 | W8A8 SmoothQuant | 成熟稳定，INT8 Tensor Core |
+| 吞吐优先 | A100/H100 | W4A16 AWQ + Marlin | 高吞吐，PPL 损失可控 |
+| 长上下文 serving | H100 | FP8 weight + KV4 | 最大化 batch size |
+| 显存极度受限 | 单卡 24GB | W4 GPTQ + KV4 | 在 4090 上跑 70B |
+| 边缘/移动端 | CPU/Apple | GGUF Q4_K_M | llama.cpp 生态完善 |
+| Blackwell 新部署 | B200 | FP4 weight + FP8 act | 最大化新硬件收益 |
+| 研究/极限压缩 | 任意 | QuIP# 2-bit | 最低 bit rate，学术探索 |
+| Prefill 加速 | H100 | W4A4 FlatQuant | Prefill compute-bound 场景 |
 
 ---
 

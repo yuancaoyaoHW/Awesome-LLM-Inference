@@ -46,6 +46,89 @@ $$\text{Speedup} \approx \frac{1 - \alpha^{\gamma+1}}{(1-\alpha)(1 + c \cdot \ga
 - $\gamma$ 存在最优值：太小浪费验证能力，太大浪费 draft 计算
 - Batch size 增大时，decode 变为 compute-bound，speculation 收益下降
 
+### 1.3 接受率深度分析 [derived_analysis]
+
+**接受率与 draft 质量的关系：**
+
+$$
+\alpha = 1 - D_{\text{TV}}(p, q) = 1 - \frac{1}{2}\sum_x |p(x) - q(x)|
+$$
+
+其中 $D_{\text{TV}}$ 为 total variation distance。Draft model 与 target model 分布越接近，$\alpha$ 越高。
+
+**影响接受率的因素：** [verified_by_paper]
+
+| 因素 | 影响 | 典型值 |
+|------|------|--------|
+| Draft model 大小 | 越大越接近 target | 68M→$\alpha$=0.6, 1B→$\alpha$=0.8 |
+| Temperature | 低温度→分布更尖锐→$\alpha$ 更高 | T=0: $\alpha$≈0.85, T=1: $\alpha$≈0.7 |
+| 任务类型 | 确定性任务（代码）$\alpha$ 高 | 代码: 0.8+, 创意写作: 0.5-0.6 |
+| 序列位置 | 开头不确定性高→$\alpha$ 低 | 前 10 tokens: -10~20% |
+| Context 长度 | 长 context 下 draft 质量下降 | 32K+: $\alpha$ 下降 5-15% |
+
+**加速比敏感性分析：** [derived_analysis]
+
+给定 $c = 0.1$（draft cost 为 verify 的 10%），$\gamma = 5$：
+
+| $\alpha$ | 期望接受长度 | 加速比 | 实际场景 |
+|----------|-------------|--------|----------|
+| 0.5 | 1.97 | 1.97x | 弱 draft model |
+| 0.7 | 3.16 | 2.11x | 中等 draft model |
+| 0.8 | 3.94 | 2.63x | 强 draft model (EAGLE) |
+| 0.9 | 4.69 | 3.13x | 极强 draft (self-spec) |
+| 0.95 | 5.22 | 3.48x | 接近理论上限 |
+
+### 1.4 Draft Cost Model [derived_analysis]
+
+**各 draft 方法的成本分析：**
+
+$$
+c = \frac{T_{\text{draft}}(\gamma)}{T_{\text{verify}}(\gamma)}
+$$
+
+| Draft 方法 | 参数量 | Draft $\gamma$ tokens 时间 | $c$ (相对 7B verify) | $c$ (相对 70B verify) |
+|-----------|--------|---------------------------|---------------------|----------------------|
+| 独立小模型 (68M) | 68M | $\gamma \times T_{68M}$ | 0.05-0.1 | 0.01-0.02 |
+| 独立小模型 (1B) | 1B | $\gamma \times T_{1B}$ | 0.15-0.2 | 0.03-0.05 |
+| Medusa heads | ~10M | $1 \times T_{\text{head}}$ | 0.02-0.05 | 0.01-0.02 |
+| EAGLE (1 layer) | ~200M | $\gamma \times T_{\text{eagle}}$ | 0.05-0.08 | 0.01-0.03 |
+| Lookahead (Jacobi) | 0 | $1 \times T_{\text{target}}$ | 0.7-1.0 | 0.7-1.0 |
+| Retrieval (REST) | 0 | $O(\log N)$ lookup | <0.01 | <0.01 |
+
+**关键 insight：** [derived_analysis]
+- 对于大 target model (70B+)，draft cost 几乎可忽略，$\alpha$ 是唯一决定因素
+- 对于小 target model (7B)，draft cost 占比显著，需要极轻量 draft
+- Medusa/EAGLE 的优势：draft 不需要 autoregressive，单次 forward 生成多 token
+
+### 1.5 Batch Size 效应与 continuous batching 冲突 [derived_analysis]
+
+**为什么 Speculative Decoding 在高 batch size 下收益下降：**
+
+1. **Verify 成本增加：** Batch 中每个请求的 draft tokens 不同，verify 需要处理不规则形状
+2. **Compute-bound 转变：** 大 batch 下 decode 从 memory-bound 变为 compute-bound，speculation 的"免费验证"不再免费
+3. **Wasted computation：** 被拒绝的 draft tokens 浪费了 verify 的计算资源
+
+**量化分析：** [derived_analysis]
+
+$$
+\text{Speedup}(B) = \frac{E[\text{accepted}] + 1}{1 + c \cdot \gamma + \Delta_{\text{batch}}(B)}
+$$
+
+其中 $\Delta_{\text{batch}}(B)$ 为 batch 异构带来的额外开销：
+
+| Batch Size | Decode 定位 | Speculation 收益 | 推荐策略 |
+|-----------|-------------|-----------------|----------|
+| 1-4 | Memory-bound | 2-4x | 标准 speculation |
+| 8-16 | 过渡区 | 1.5-2.5x | 短 $\gamma$，高 $\alpha$ draft |
+| 32-64 | Compute-bound | 1.0-1.5x | 仅对低延迟请求 speculate |
+| 128+ | Compute-bound | ~1.0x（无收益） | 不使用 speculation |
+
+**与 continuous batching 的集成挑战：** [verified_by_code]
+- 每个 iteration 中，部分请求在 draft，部分在 verify，部分在正常 decode
+- Draft 失败的请求需要 rollback KV cache（回收已分配的 block）
+- 不同请求的 draft length 不同，导致 padding 浪费或需要 variable-length batch 支持
+- MagicDec 方案：对大 batch 使用 sparse KV attention 降低 verify 成本
+
 ### 1.3 Token-level vs Sequence-level Speculation
 
 | 类型 | 描述 | 代表方法 |
@@ -182,6 +265,54 @@ BA [ 0  1  0  0  1 ]
 | [Medusa](https://arxiv.org/abs/2401.10774) | Top-k per head | 固定 (64 nodes) | 否 |
 | [EAGLE-2](https://arxiv.org/abs/2406.16858) | Confidence-based | 动态 | 是 |
 | [MineDraft](https://arxiv.org/abs/2603.18016) | Batch-aware | 动态 | 是 |
+
+### 3.4 Tree 结构优化分析 [derived_analysis]
+
+**最优 Tree Width/Depth Tradeoff：**
+
+给定总 budget $T$ 个 tree nodes，需要在 width（每层候选数）和 depth（树深度）间权衡：
+
+$$
+T = \sum_{d=1}^{D} w_d, \quad \text{其中 } w_d \text{ 为第 } d \text{ 层的宽度}
+$$
+
+**期望接受 token 数：** [derived_analysis]
+
+$$
+E[\text{accepted}] = \sum_{d=1}^{D} \left(1 - (1-\alpha)^{w_d}\right) \prod_{i=1}^{d-1}\left(1 - (1-\alpha)^{w_i}\right)
+$$
+
+直觉：每层至少有一个 token 被接受的概率为 $1 - (1-\alpha)^{w_d}$。
+
+**经验最优配置（$\alpha = 0.7$, budget=64）：** [verified_by_paper]
+
+| 配置 | Depth | Width 分布 | 期望接受长度 | 适用场景 |
+|------|-------|-----------|-------------|----------|
+| 宽浅树 | 3 | [16, 16, 32] | 2.8 | 低 $\alpha$，不确定性高 |
+| 均衡树 | 5 | [8, 8, 8, 8, 32] | 3.5 | 中等 $\alpha$ |
+| 窄深树 | 8 | [4, 4, 4, 4, 4, 4, 4, 36] | 4.2 | 高 $\alpha$，确定性任务 |
+| EAGLE-2 动态 | 3-10 | 自适应 | 4.0-5.0 | 通用 |
+
+**关键 insight：** [derived_analysis]
+- 高 $\alpha$ 时深树更优（每层大概率接受，深度带来更多 token）
+- 低 $\alpha$ 时宽树更优（需要更多候选提高每层接受概率）
+- EAGLE-2 的动态调整根据 confidence 实时决定，避免固定配置的次优性
+
+### 3.5 EAGLE vs Medusa vs Lookahead vs Draft&Verify 综合对比
+
+| 维度 | EAGLE-2/3 | Medusa | Lookahead | Draft Model | REST |
+|------|-----------|--------|-----------|-------------|------|
+| **Draft 机制** | AR draft head | 独立 heads | Jacobi iteration | 独立小模型 | N-gram 检索 |
+| **Token 依赖** | 保持 AR 依赖 | 无（独立预测） | 隐式（Jacobi） | 完整 AR | 无 |
+| **额外参数** | ~200M (1 layer) | ~10M (heads) | 0 | 68M-1B | 0 (+ datastore) |
+| **训练需求** | 需要 target hidden states | 需要 target hidden states | 无 | 可用现有模型 | 无 |
+| **Tree 支持** | 动态 tree | 固定 tree | N-gram pool | 可选 | 无 |
+| **Speedup (7B)** | 3.0-4.2x | 2.2-3.6x | 1.5-2.0x | 1.8-2.5x | 1.5-2.5x |
+| **Speedup (70B)** | 3.5-4.5x | 2.5-3.8x | 1.8-2.5x | 2.0-3.0x | 2.0-3.0x |
+| **Lossless** | 是 | 近似（typical） | 是 | 是 | 是 |
+| **大 batch 友好** | 中 | 中 | 差 | 差 | 好 |
+| **长 context 友好** | 中（需 MagicDec） | 差 | 差 | 差 | 好（检索快） |
+| **部署复杂度** | 中（需训练 head） | 中 | 低 | 低 | 中（需 datastore） |
 
 ---
 

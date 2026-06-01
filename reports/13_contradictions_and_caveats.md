@@ -14,6 +14,9 @@
 - 论文声称：2-4x speedup（单请求，batch=1）
 - 实际 serving：batch size 增大后收益急剧下降
 
+**证据等级**：A（多篇独立论文实验验证）  
+**解决状态**：部分解决 — [MagicDec](https://arxiv.org/abs/2408.11049)/[MineDraft](https://arxiv.org/abs/2603.18016) 针对高 batch 场景提出方案，但尚未广泛验证
+
 **原因分析**：
 - 论文通常在 batch=1 下测试（memory-bound，speculation 收益最大）
 - 实际 serving 中 batch=32-128，decode 变为 compute-bound
@@ -22,11 +25,14 @@
 
 **结论**：Speculative decoding 在低并发/长序列场景有效，高吞吐 serving 中收益有限。[MagicDec](https://arxiv.org/abs/2408.11049) 尝试解决这个问题。
 
-### 1.2 KV Cache 压缩的精度影响
+### 1.2 KV cache 压缩的精度影响
 
 **矛盾**：
 - H2O/SnapKV 声称：保留 20% KV 即可维持精度
 - 实际测试：在 multi-turn、长依赖任务上精度下降明显
+
+**证据等级**：A（MiKV、CriticalKV 等多篇论文独立验证）  
+**解决状态**：部分解决 — 自适应策略（AdaKV, DynamicKV）和三路分配（VECTOR）改善了问题
 
 **原因分析**：
 - 论文通常在 perplexity 或简单 benchmark 上评估
@@ -34,13 +40,16 @@
 - Attention pattern 在不同层、不同 head 差异大
 - 静态 eviction 策略无法适应动态查询
 
-**结论**：KV 压缩需要 task-aware 评估，不能只看 PPL。
+**结论**：KV cache 压缩需要 task-aware 评估，不能只看 PPL。
 
 ### 1.3 [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) 的 overhead
 
 **矛盾**：
 - [Orca](https://www.usenix.org/conference/osdi22/presentation/yu) 论文：36.9x throughput improvement
 - 实际部署：overhead 在 2-5%
+
+**证据等级**：B（对比基准不同导致数字差异，非真正矛盾）  
+**解决状态**：已解决 — 业界共识是 continuous batching 有效但 36.9x 是极端对比
 
 **原因分析**：
 - 36.9x 是与最差情况（static batching + padding）对比
@@ -49,15 +58,18 @@
 
 **结论**：Continuous batching 确实有效，但 36.9x 是极端情况。
 
-### 1.4 P/D Disaggregation 的网络需求
+### 1.4 P/D disaggregation 的网络需求
 
 **矛盾**：
 - [DistServe](https://arxiv.org/abs/2401.09670) 声称：1.5-2.3x goodput improvement
 - 实际部署：需要极高带宽网络，否则 KV transfer 成为瓶颈
 
+**证据等级**：A（多个工业部署报告验证）  
+**解决状态**：部分解决 — Mooncake 的 KVCache-centric 设计和 KV 压缩传输缓解了问题，但仍需高速网络
+
 **原因分析**：
 - 论文假设 NVLink/InfiniBand 高速互联
-- KV Cache 传输量：$2 \times L \times n_{kv\_heads} \times d_{head} \times seq\_len \times 2$ bytes
+- KV cache 传输量：$2 \times L \times n_{kv\_heads} \times d_{head} \times seq\_len \times 2$ bytes
 - 对于 Llama-70B, seq_len=2048：~2.6 GB per request
 - 在 PCIe/Ethernet 环境下延迟不可接受
 
@@ -68,6 +80,9 @@
 **矛盾**：
 - [FlashAttention](https://arxiv.org/abs/2205.14135) 论文：2-4x speedup
 - 实际：在短序列 + 大 batch 下可能不如 cuBLAS
+
+**证据等级**：A（FlashAttention-3 论文自身承认此限制）  
+**解决状态**：已解决 — 业界共识是根据 workload 特征选择 kernel
 
 **原因分析**：
 - [FlashAttention](https://arxiv.org/abs/2205.14135) 优化的是 IO（减少 HBM 访问）
@@ -94,7 +109,7 @@
 ### 2.2 内存计算常见错误
 
 **错误 1**：忽略 activation memory
-- KV Cache 不是唯一的显存消耗
+- KV cache 不是唯一的显存消耗
 - Prefill 阶段的 activation 可能很大：$batch \times seq\_len \times hidden \times 4$ bytes
 
 **错误 2**：忽略 memory fragmentation
@@ -157,7 +172,7 @@
 - 需要 per-tensor 或 per-token scaling 来缓解
 - 某些任务（数学推理）对精度更敏感
 
-### 3.4 "Prefix Caching 总是有效"
+### 3.4 "prefix caching 总是有效"
 
 **误区**：开启 prefix caching 一定能加速。
 
@@ -167,7 +182,7 @@
 - Cache 占用显存，减少可用于新请求的空间
 - 需要根据 workload 特征决定是否开启
 
-### 3.5 "KV Cache 压缩可以无限压"
+### 3.5 "KV cache 压缩可以无限压"
 
 **误区**：压缩到 2-bit 仍然可用。
 
@@ -183,13 +198,13 @@
 
 ### 4.1 尚未解决的矛盾
 
-| 矛盾 | 现状 | 可能方向 |
-|------|------|----------|
-| Latency vs Throughput | 无法同时最优 | P/D disaggregation, adaptive batching |
-| Compression vs Accuracy | 压缩越多精度越差 | Task-aware compression, learned codebook |
-| Speculation vs Batch | 高 batch 下 speculation 无效 | Batch-aware speculation ([MineDraft](https://arxiv.org/abs/2603.18016)) |
-| Long Context vs Memory | 长序列 KV cache 爆炸 | Offloading + compression + sparse |
-| Generality vs Performance | 通用框架 vs 专用优化 | Compiler-based approach ([MLC-LLM](https://github.com/mlc-ai/mlc-llm)) |
+| 矛盾 | 现状 | 可能方向 | 证据等级 | 解决状态 |
+|------|------|----------|----------|----------|
+| Latency vs Throughput | 无法同时最优 | P/D disaggregation, adaptive batching | A | 部分解决 |
+| Compression vs Accuracy | 压缩越多精度越差 | Task-aware compression, learned codebook | A | 开放 |
+| Speculation vs Batch | 高 batch 下 speculation 无效 | Batch-aware speculation ([MineDraft](https://arxiv.org/abs/2603.18016)) | B | 部分解决 |
+| Long Context vs Memory | 长序列 KV cache 爆炸 | Offloading + compression + sparse | A | 开放 |
+| Generality vs Performance | 通用框架 vs 专用优化 | Compiler-based approach ([MLC-LLM](https://github.com/mlc-ai/mlc-llm)) | B | 开放 |
 
 ### 4.2 需要更多实验验证的声明
 
@@ -207,10 +222,10 @@
 
 | 论文 | 当前归属 | 问题 | 建议 |
 |------|----------|------|------|
-| [Mooncake](https://arxiv.org/abs/2407.00079) | 出现在 Trending、Framework、Batching、KV Cache 四个章节 | 重复计入导致统计膨胀 | 应标注主归属为 Framework/Disaggregation，其余为交叉引用 |
+| [Mooncake](https://arxiv.org/abs/2407.00079) | 出现在 Trending、Framework、Batching、KV cache 四个章节 | 重复计入导致统计膨胀 | 应标注主归属为 Framework/Disaggregation，其余为交叉引用 |
 | [Star Attention](https://arxiv.org/abs/2411.17116) | 同时出现在 Trending 和 Multi-GPU Parallelism | 重复 | 主归属 Parallelism |
 | DeepSeek-V2/V3/R1 | 同时出现在 Trending、[MLA](https://arxiv.org/abs/2405.04434)、[MoE](https://arxiv.org/abs/2407.06204) | 重复 | 主归属 MLA/Architecture |
-| [Splitwise](https://arxiv.org/abs/2311.18677) | 归属 [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) | 实际是 P/D Disaggregation 的早期工作 | 应归属 Disaggregating Prefill and Decoding |
+| [Splitwise](https://arxiv.org/abs/2311.18677) | 归属 [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) | 实际是 P/D disaggregation 的早期工作 | 应归属 Disaggregating Prefill and Decoding |
 | [LightSeq](https://arxiv.org/abs/2310.03294) | 归属 [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) | 实际是 Sequence Parallelism | 应归属 Multi-GPU Parallelism |
 | vAttention/vTensor | 归属 [Continuous Batching](https://www.usenix.org/system/files/osdi22-yu.pdf) | 核心贡献是 memory management | 可保留，但更适合独立的 Memory Management 子章节 |
 
@@ -220,7 +235,7 @@
 
 | 论文 | 年份 | 重要性 | 遗漏原因推测 |
 |------|------|--------|-------------|
-| [Sarathi-Serve](https://arxiv.org/abs/2403.02310) (stall-free serving) | 2024 | 高 — chunked prefill 的系统化实现 | 仅 [Sarathi](https://arxiv.org/abs/2308.16369) 被提及（在 KV Cache 章节），[Sarathi-Serve](https://arxiv.org/abs/2403.02310) 未收录 |
+| [Sarathi-Serve](https://arxiv.org/abs/2403.02310) (stall-free serving) | 2024 | 高 — chunked prefill 的系统化实现 | 仅 [Sarathi](https://arxiv.org/abs/2308.16369) 被提及（在 KV cache 章节），[Sarathi-Serve](https://arxiv.org/abs/2403.02310) 未收录 |
 | LoongServe (elastic SP) | 2024 | 中 — 动态 SP 调度 | 可能发表时间较晚 |
 | ORCA 的后续 (Vidur, etc.) | 2024 | 中 — serving simulator | 工具类论文 |
 | Infinite-LLM/DistKV-LLM | 2024.01 | 已收录 | — |
@@ -262,7 +277,7 @@ graph TD
         R04[04 Systems Lineage<br>9大系统演进]
         R05[05 Kernel & Math<br>FlashAttention/Sparse]
         R06[06 Serving & Scheduling<br>Batching/P-D/Memory]
-        R07[07 KV Cache<br>压缩/调度/长上下文]
+        R07[07 KV cache<br>压缩/调度/长上下文]
         R08[08 Speculative Decoding<br>Draft-Verify框架]
         R09[09 Quantization<br>Weight/Activation/KV]
         R10[10 Distributed<br>TP/SP/EP/PP]

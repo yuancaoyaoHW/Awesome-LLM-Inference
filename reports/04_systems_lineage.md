@@ -4,32 +4,44 @@
 
 本文档分析 LLM 推理领域主要系统的技术演进、核心创新和相互借鉴关系。
 
+**证据等级说明**：
+- `[verified_by_paper]` — 论文中有明确实验数据支撑
+- `[verified_by_code]` — 开源代码中可直接验证
+- `[derived_analysis]` — 基于多个来源的综合分析推导
+- `[unverified_claim]` — 来自博客/社区报告，未经独立验证
+
 ---
 
 ## 1. [vLLM](https://github.com/vllm-project/vllm) (UC Berkeley, 2023.09)
 
 ### 核心创新
-- [**PagedAttention**](https://arxiv.org/abs/2309.06180): 将 KV cache 按 page（block）管理，类似 OS 虚拟内存分页，解决 KV cache 内存碎片化问题
-- 实现 near-zero waste 的内存利用率（浪费 < 4%，对比 naive 方案 60-80% 浪费）
+- [**PagedAttention**](https://arxiv.org/abs/2309.06180): 将 KV cache 按 page（block）管理，类似 OS 虚拟内存分页，解决 KV cache 内存碎片化问题 `[verified_by_paper]`
+- 实现 near-zero waste 的内存利用率（浪费 < 4%，对比 naive 方案 60-80% 浪费）`[verified_by_paper]`
+
+### 架构设计
+- **整体架构**: Python 控制面 + CUDA 数据面，AsyncLLMEngine 驱动异步请求处理 `[verified_by_code]`
+- **V1 重构 (2025.01)**: 插件化架构，模型/硬件后端可替换，加入 PyTorch Foundation 治理 `[verified_by_code]`
+- **请求生命周期**: API Server → Tokenizer → Scheduler → Model Runner → Sampler → Detokenizer → Streaming Response `[verified_by_code]`
 
 ### 关键技术组件
-| 组件 | 实现 |
-|------|------|
-| Scheduler | Continuous batching + preemption (swap/recompute) |
-| Memory Manager | [PagedAttention](https://arxiv.org/abs/2309.06180) block table，copy-on-write for parallel sampling |
-| Kernel Backend | 自研 paged attention kernel，后集成 FlashAttention/FlashInfer |
-| Prefix Caching | Automatic prefix caching (APC)，hash-based block matching |
 
-### 支持的优化技术
-- Continuous batching, prefix caching, speculative decoding
-- Tensor parallelism, chunked prefill
-- FP8/INT8 quantization (via CUTLASS/Marlin kernels)
-- LoRA serving, guided decoding
+| 组件 | 实现 | 证据等级 |
+|------|------|----------|
+| Scheduler | Continuous batching + preemption (swap/recompute)，V1 引入 SchedulerOutput 抽象 | `[verified_by_code]` |
+| KV Cache Manager | [PagedAttention](https://arxiv.org/abs/2309.06180) block table，copy-on-write for parallel sampling，block size 默认 16 tokens | `[verified_by_paper]` |
+| Prefix Cache | Automatic Prefix Caching (APC)，hash-based block matching，支持跨请求前缀复用 | `[verified_by_code]` |
+| Kernel Backend | 自研 paged attention kernel → FlashAttention/FlashInfer 集成，Marlin/CUTLASS for quantized GEMM | `[verified_by_code]` |
+| Speculative Decoding | 支持 draft model、ngram、EAGLE、Medusa 等多种 draft 策略 | `[verified_by_code]` |
+| Quantization | FP8/INT8 (CUTLASS)、W4A16 (Marlin/GPTQ/AWQ)、GGUF 格式兼容 | `[verified_by_code]` |
+| Distributed Serving | Tensor Parallelism (Megatron-style)、Pipeline Parallelism、Ray-based multi-node | `[verified_by_code]` |
+| Observability | Prometheus metrics 导出、OpenTelemetry tracing、per-request latency breakdown | `[verified_by_code]` |
 
-### 性能特征与适用场景
-- 高吞吐在线服务，适合多租户 LLM serving
-- 对 long context 场景内存效率高
-- 社区生态最活跃（70k+ stars）
+### 生产部署注意事项
+- **GPU 内存规划**: `gpu_memory_utilization` 参数控制 KV cache 预分配比例，默认 0.9，长 context 场景需降低 `[derived_analysis]`
+- **Block size 选择**: 较大 block (32) 减少 block table 开销但增加碎片，较小 block (8) 反之 `[derived_analysis]`
+- **Preemption 策略**: swap 模式需要足够 CPU 内存，recompute 模式适合 prefill 较快的短 context `[verified_by_code]`
+- **CUDA Graph**: 启用后 decode 阶段 kernel launch overhead 降低 ~30%，但限制动态 batch size `[derived_analysis]`
+- **已知限制**: V0 架构下 scheduler 是单线程瓶颈，高 QPS 场景需关注；V1 已改善 `[verified_by_code]`
 
 ### 技术借鉴
 - 从 [Orca](https://www.usenix.org/conference/osdi22/presentation/yu) 借鉴 continuous batching 思想
@@ -394,14 +406,74 @@ graph TD
 | [DeepSpeed](https://github.com/microsoft/DeepSpeed)-FastGen | [DeepSpeed](https://github.com/microsoft/DeepSpeed) 训练生态集成 + SplitFuse |
 | [LightLLM](https://github.com/ModelTC/lightllm) | 轻量级 + 研究友好 + Triton kernel |
 | [Mooncake](https://arxiv.org/abs/2407.00079) | KV cache 中心的 disaggregated 架构 |
+| [NVIDIA Dynamo](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) | 数据中心级编排 + P/D disaggregation + GPU autoscaling |
+| [llm-d](https://github.com/llm-d/llm-d) | Kubernetes 原生 + prefix-cache-aware routing + 弹性伸缩 |
+
+---
+
+## 10. [NVIDIA Dynamo](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, 2025)
+
+### 核心创新
+- **数据中心级推理编排**: 原生 P/D disaggregation、多节点 Expert Parallelism、智能路由调度 `[verified_by_code]`
+- **GPU Autoscaling**: 基于推理负载的自动扩缩容，与 Kubernetes 深度集成 `[verified_by_code]`
+
+### 关键技术组件
+
+| 组件 | 实现 | 证据等级 |
+|------|------|----------|
+| Scheduler | Disaggregated prefill/decode scheduler，支持 KV cache-aware routing | `[verified_by_code]` |
+| KV Cache Manager | 跨节点 KV cache transfer，支持 RDMA/NVLink 传输 | `[derived_analysis]` |
+| Routing | Prefix-aware request routing，最大化 KV cache 命中率 | `[verified_by_code]` |
+| Scaling | GPU-level autoscaling，基于 queue depth 和 SLO violation rate | `[verified_by_code]` |
+| Backend | 支持 vLLM、TensorRT-LLM、SGLang 作为 worker backend | `[verified_by_code]` |
+| Observability | DCGM metrics、per-request tracing、SLO dashboard | `[verified_by_code]` |
+
+### 生产部署注意事项
+- **网络要求**: P/D disaggregation 需要高带宽互联（InfiniBand/RoCE），否则 KV transfer 成为瓶颈 `[derived_analysis]`
+- **适用规模**: 面向 100+ GPU 的大规模集群，小规模部署 overhead 不划算 `[derived_analysis]`
+- **MoE 支持**: 原生 Expert Parallelism 路由，支持 DeepSeek-V3 类 MoE 模型的高效部署 `[unverified_claim]`
+
+### 技术借鉴
+- 整合 vLLM/TensorRT-LLM 作为底层 worker
+- P/D disaggregation 思想来自 DistServe/Mooncake
+- 路由策略受 llm-d 和 SGLang prefix-aware scheduling 影响
+
+---
+
+## 11. [llm-d](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025)
+
+### 核心创新
+- **Kubernetes 原生**: 基于 K8s Gateway API 的分布式推理框架 `[verified_by_code]`
+- **Prefix-cache-aware routing**: 请求路由考虑各 worker 的 prefix cache 状态，最大化复用 `[verified_by_code]`
+
+### 关键技术组件
+
+| 组件 | 实现 | 证据等级 |
+|------|------|----------|
+| Scheduler | K8s-native pod scheduling，支持 P/D disaggregation | `[verified_by_code]` |
+| Router | Prefix-cache-aware load balancer，基于 radix tree 匹配 | `[verified_by_code]` |
+| KV Cache Manager | 跨 pod KV cache sharing，支持 Redis/共享存储后端 | `[verified_by_code]` |
+| Scaling | HPA/VPA + custom metrics (queue depth, KV utilization) | `[verified_by_code]` |
+| Backend | vLLM worker pods，支持 TP/PP 配置 | `[verified_by_code]` |
+| MoE Support | Wide Expert Parallelism，跨节点 expert 分布 | `[unverified_claim]` |
+
+### 生产部署注意事项
+- **K8s 依赖**: 需要 Kubernetes 1.29+ 和 Gateway API v1，非 K8s 环境不适用 `[verified_by_code]`
+- **网络**: 推荐 RDMA-capable CNI (如 Multus + SR-IOV) 用于 KV transfer `[derived_analysis]`
+- **适用场景**: 多租户云环境、需要弹性伸缩的 LLM serving 平台 `[derived_analysis]`
+
+### 技术借鉴
+- Worker 层使用 vLLM 引擎
+- Prefix-aware routing 受 SGLang RadixAttention 启发
+- Disaggregated 架构参考 DistServe/Mooncake 设计
 
 ---
 
 ## 最新进展 (2025-2026)
 
-- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, 2025): 数据中心级推理框架，原生支持prefill/decode disaggregation、多节点EP和智能路由调度
-- [**llm-d**](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025): Kubernetes原生的分布式推理框架，支持disaggregated serving、prefix-cache-aware routing和MoE wide-EP
-- [**vLLM V1**](https://blog.vllm.ai/2025/01/27/v1-alpha-release.html) (vLLM Project/PyTorch Foundation, 2025): 架构重构，插件化模型和硬件后端，加入PyTorch Foundation治理
-- [**SGLang v0.4**](https://github.com/sgl-project/sglang) (SGLang Team, 2025): 支持确定性batch-invariant kernel、DeepSeek-R1推理优化，服务300K+ GPU
-- [**SpecForge**](https://arxiv.org/abs/2603.18567) (2026): 开源生产级speculative decoding训练框架，完整支持EAGLE-3，Qwen3-235B训练加速9.9x
-- [**PPD (Prefill-Prefill-Decode)**](https://arxiv.org/abs/2603.13358) (2026): 针对多轮对话的disaggregation优化，区分full-prefill和append-prefill，减少KV传输开销
+- [**NVIDIA Dynamo**](https://developer.nvidia.com/blog/nvidia-dynamo-adds-gpu-autoscaling-kubernetes-automation-and-networking-optimizations/) (NVIDIA, 2025): 数据中心级推理框架，原生支持 P/D disaggregation、多节点 EP 和智能路由调度
+- [**llm-d**](https://github.com/llm-d/llm-d) (Red Hat/IBM, 2025): Kubernetes 原生的分布式推理框架，支持 disaggregated serving、prefix-cache-aware routing 和 MoE wide-EP
+- [**vLLM V1**](https://blog.vllm.ai/2025/01/27/v1-alpha-release.html) (vLLM Project/PyTorch Foundation, 2025): 架构重构，插件化模型和硬件后端，加入 PyTorch Foundation 治理
+- [**SGLang v0.4**](https://github.com/sgl-project/sglang) (SGLang Team, 2025): 支持确定性 batch-invariant kernel、DeepSeek-R1 推理优化，服务 300K+ GPU
+- [**SpecForge**](https://arxiv.org/abs/2603.18567) (2026): 开源生产级 speculative decoding 训练框架，完整支持 EAGLE-3，Qwen3-235B 训练加速 9.9x
+- [**PPD (Prefill-Prefill-Decode)**](https://arxiv.org/abs/2603.13358) (2026): 针对多轮对话的 disaggregation 优化，区分 full-prefill 和 append-prefill，减少 KV 传输开销

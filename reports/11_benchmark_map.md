@@ -86,7 +86,7 @@ python -m sglang.bench_serving \
 |--------|------|------|
 | ShareGPT | 真实对话，长度分布不均 | Online serving |
 | LMSYS-Chat-1M | 大规模真实请求 | 负载模拟 |
-| [Alpa](https://arxiv.org/abs/2201.12023)ca | 短指令 | 低延迟场景 |
+| [Alpaca](https://arxiv.org/abs/2201.12023) | 短指令 | 低延迟场景 |
 | LongBench | 长文本 | Long context |
 | Synthetic | 固定长度 | 控制变量实验 |
 
@@ -299,8 +299,8 @@ $$\text{Cost per 1M tokens} = \frac{GPU\_price\_per\_hour \times N_{GPUs}}{throu
 |----------|----------|---------|-----------|-----|
 | [FP8](https://arxiv.org/abs/2209.05433) Quantization | 低 | 1.5-2x | 33-50% | 高 |
 | [Speculative Decoding](https://arxiv.org/abs/2211.17192) | 中 | 2-3x | 50-67% | 中 |
-| P/D Disaggregation | 高 | 1.5-2x | 33-50% | 低 |
-| Prefix Caching | 低 | 1.2-2x (场景依赖) | 17-50% | 高 |
+| P/D disaggregation | 高 | 1.5-2x | 33-50% | 低 |
+| Prefix caching | 低 | 1.2-2x (场景依赖) | 17-50% | 高 |
 | KV Compression | 中 | 1.2-1.5x | 17-33% | 中 |
 
 ---

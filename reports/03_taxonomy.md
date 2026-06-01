@@ -49,26 +49,26 @@
 
 ## 二、Memory Management（内存管理）
 
-### 2.1 KV Cache Memory Allocation
+### 2.1 KV cache Memory Allocation
 - [**PagedAttention**](https://arxiv.org/abs/2309.06180) (2023.09): 虚拟内存分页管理 KV cache（vLLM 核心）
 - [**vAttention**](https://arxiv.org/abs/2405.04437) (2024.05): 利用 OS 虚拟内存，无需 paging kernel 开销
 - [**vTensor**](https://arxiv.org/abs/2407.15309) (2024.07): 弹性虚拟 tensor 管理
 
-### 2.2 [KV Cache Compress](https://arxiv.org/abs/2305.17118)ion
+### 2.2 [KV Cache Compression](https://arxiv.org/abs/2305.17118)
 - **Quantization**: [KVQuant](https://arxiv.org/abs/2401.18079) (2024.01), [SKVQ](https://arxiv.org/abs/2405.06219) (2024.05), [ZipCache](https://arxiv.org/abs/2405.14256) (2024.05), [NexusQuant](https://arxiv.org/abs/2505.00949) (2026.03)
 - **Dropping/Eviction**: [H2O](https://arxiv.org/abs/2306.14048) (2023.06), [Scissorhands (2023.05)](https://arxiv.org/abs/2305.17118), [SnapKV](https://arxiv.org/abs/2404.14469) (2024.04), [AdaKV (2024.10)](https://arxiv.org/abs/2407.11550)
 - **Low-Rank**: [Palu](https://arxiv.org/abs/2407.21118) (2024.07), [LORC (2024.10)](https://arxiv.org/abs/2410.03111), [Eigen Attention](https://arxiv.org/abs/2408.05646) (2024.08)
 - **Cross-Layer Sharing**: [CLA](https://arxiv.org/abs/2405.12981) (2024.05), [MLKV](https://arxiv.org/abs/2406.09297) (2024.07), [MiniCache](https://arxiv.org/abs/2405.14366) (2024.05)
 - **Hybrid**: [GEAR](https://arxiv.org/abs/2403.05527) (2024.03), [DynamicKV](https://arxiv.org/abs/2412.14838) (2024.12), [KVzip (2025.05)](https://arxiv.org/abs/2505.23416)
 
-### 2.3 Prefix Caching
+### 2.3 Prefix caching
 - [**Prompt Cache**](https://arxiv.org/abs/2311.04934) (2023.11): 模块化 attention 复用
 - [**RadixAttention**](https://arxiv.org/abs/2312.07104) (2023.12): [SGLang](https://github.com/sgl-project/sglang) 的 radix tree 前缀匹配
 - [**ChunkAttention**](https://arxiv.org/abs/2402.15220) (2024.02): prefix-aware KV cache + two-phase partition
 - [**CacheBlend**](https://arxiv.org/abs/2405.16444) (2024.05): cached knowledge fusion
 - [**Hydragen** (2024.02)](https://arxiv.org/abs/2402.05099): shared prefix high-throughput inference
 
-### 2.4 Distributed KV Cache
+### 2.4 Distributed KV cache
 - [**DistKV-LLM/Infinite-LLM**](https://arxiv.org/abs/2401.02669) (2024.01): 分布式 KV cache + DistAttention
 - [**MemServe**](https://arxiv.org/abs/2406.17565) (2024.06): elastic memory pool for disaggregated serving
 - [**Mooncake**](https://arxiv.org/abs/2407.00079) (2024.06): KVCache-centric disaggregated architecture
@@ -98,7 +98,7 @@
 - [**FP8-LM**](https://arxiv.org/abs/2310.18313) (2023.10): FP8 training
 - [**FP6-LLM**](https://arxiv.org/abs/2401.14112) (2024.01): FP6 algorithm-system co-design
 
-### 3.5 KV Cache Quantization
+### 3.5 KV cache Quantization
 - **TensorRT-LLM KV FP8** (2023.10)
 - [**KVQuant**](https://arxiv.org/abs/2401.18079) (2024.01): 10M context via KV quantization
 - [**QAQ**](https://arxiv.org/abs/2403.04643) (2024.03): quality adaptive quantization
@@ -113,7 +113,7 @@
 - [**ZeRO** (2019.10)](https://arxiv.org/abs/1910.02054): memory optimization stages 1/2/3
 - [**FSDP** (2025.05)](https://pytorch.org/tutorials/intermediate/FSDP_tutorial.html): PyTorch Fully Sharded Data Parallel
 
-### 4.2 [Tensor Parallel](https://arxiv.org/abs/2402.04925)ism
+### 4.2 [Tensor Parallelism](https://arxiv.org/abs/2402.04925)
 - **Megatron-LM TP** (2020.05): column/row parallel linear layers
 - **Communication Compression** (2024.11): 压缩 TP 通信
 
@@ -254,21 +254,21 @@ graph LR
 
     MEM --> MEM1[PagedAttention<br>vAttention, vTensor]
     MEM --> MEM2[KV Compression<br>Quant/Drop/LowRank]
-    MEM --> MEM3[Prefix Caching<br>Radix, ChunkAttn]
+    MEM --> MEM3[Prefix caching<br>Radix, ChunkAttn]
     MEM --> MEM4[Distributed KV<br>DistKV, Mooncake]
 
     QUANT --> Q1[Weight-Only<br>GPTQ, AWQ]
     QUANT --> Q2[W+A<br>SmoothQuant, QServe]
     QUANT --> Q3[Low-Bit<br>BitNet]
-    QUANT --> Q4[KV Cache<br>KVQuant, NexusQuant]
+    QUANT --> Q4[KV cache<br>KVQuant, NexusQuant]
 
     PAR --> P1[TP: Megatron]
     PAR --> P2[SP: Ring/Star/Ulysses]
     PAR --> P3[EP: DeepEP, EPLB]
     PAR --> P4[PP: DualPipe]
 
-    SCHED --> S1[Continuous Batching<br>Orca, Sarathi]
-    SCHED --> S2[P/D Disaggregation<br>DistServe, Mooncake]
+    SCHED --> S1[Continuous batching<br>Orca, Sarathi]
+    SCHED --> S2[P/D disaggregation<br>DistServe, Mooncake]
     SCHED --> S3[Scheduling<br>SJF, SLO-aware]
 
     DEC --> D1[Speculative<br>Medusa, TriForce]
@@ -291,7 +291,7 @@ graph LR
 [Online Softmax (2018)](https://arxiv.org/pdf/2112.05682.pdf) → [FlashAttention (2022.05)](https://courses.cs.washington.edu/courses/cse599m/23sp/notes/flashattn.pdf) → [FlashAttention-2 (2023.07)](https://arxiv.org/pdf/2307.08691.pdf) → [Flash-Decoding (2023.10)](https://crfm.stanford.edu/2023/10/12/flashdecoding.html) → [FlashAttention-3 (2024.07)](https://tridao.me/publications/flash3/flash3.pdf) → [FFPA (2025.01)](https://github.com/xlite-dev/ffpa-attn)
 ```
 
-### KV Cache 压缩演进
+### KV cache 压缩演进
 ```
 MQA (2019) → GQA (2023) → MLA (2024)
 [PagedAttention (2023)](https://arxiv.org/pdf/2309.06180.pdf) → [vAttention (2024)](https://arxiv.org/pdf/2405.04437) → [vTensor (2024)](https://arxiv.org/pdf/2407.15309)
